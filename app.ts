@@ -38,6 +38,10 @@ document.addEventListener("DOMContentLoaded", () => {
   if (page === "chat.html") {
     initChat();
   }
+
+  if (page === "settings.html") {
+    initSettings();
+  }
 });
 
 /* ===== FIREBASE AUTH ===== */
@@ -163,6 +167,126 @@ function loadUserRooms(callback: (rooms: any[]) => void): () => void {
     }, (error: any) => {
       console.error("Rooms error:", error);
     });
+}
+
+/* ===== PROFILE FUNCTIONS ===== */
+
+async function loadProfile(uid: string): Promise<any> {
+  const doc = await db.collection("users").doc(uid).get();
+  return doc.data() || {};
+}
+
+async function saveProfile(uid: string, data: any): Promise<void> {
+  await db.collection("users").doc(uid).update(data);
+}
+
+async function uploadAvatar(uid: string, file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = async () => {
+      const dataUrl = reader.result as string;
+      try {
+        await db.collection("users").doc(uid).update({ photoURL: dataUrl });
+        resolve(dataUrl);
+      } catch (err) {
+        reject(err);
+      }
+    };
+    reader.onerror = () => reject(new Error("Failed to read file"));
+    reader.readAsDataURL(file);
+  });
+}
+
+async function removeAvatar(uid: string): Promise<void> {
+  await db.collection("users").doc(uid).update({ photoURL: "" });
+}
+
+/* ===== SETTINGS ===== */
+
+function initSettings(): void {
+  const user = auth.currentUser;
+  if (!user) return;
+
+  const usernameInput = document.getElementById("settings-username") as HTMLInputElement | null;
+  const bioInput = document.getElementById("settings-bio") as HTMLTextAreaElement | null;
+  const emailInput = document.getElementById("settings-email") as HTMLInputElement | null;
+  const saveBtn = document.getElementById("save-settings-btn");
+  const uploadBtn = document.getElementById("upload-avatar-btn");
+  const removeBtn = document.getElementById("remove-avatar-btn");
+  const fileInput = document.getElementById("avatar-input") as HTMLInputElement | null;
+  const avatarImg = document.getElementById("avatar-img") as HTMLImageElement | null;
+  const avatarPlaceholder = document.getElementById("avatar-placeholder");
+
+  if (emailInput) emailInput.value = user.email || "";
+
+  loadProfile(user.uid).then((profile) => {
+    if (usernameInput) usernameInput.value = profile.username || user.displayName || "";
+    if (bioInput) bioInput.value = profile.bio || "";
+    if (profile.photoURL) {
+      if (avatarImg) { avatarImg.src = profile.photoURL; avatarImg.style.display = "block"; }
+      if (avatarPlaceholder) avatarPlaceholder.style.display = "none";
+      if (removeBtn) removeBtn.style.display = "";
+    }
+  });
+
+  uploadBtn?.addEventListener("click", () => fileInput?.click());
+
+  fileInput?.addEventListener("change", async () => {
+    const file = fileInput.files?.[0];
+    if (!file) return;
+    if (file.size > 5 * 1024 * 1024) {
+      showAuthError("Image must be under 5MB");
+      return;
+    }
+    uploadBtn!.textContent = "Uploading...";
+    (uploadBtn as HTMLButtonElement).disabled = true;
+    try {
+      const url = await uploadAvatar(user.uid, file);
+      if (avatarImg) { avatarImg.src = url; avatarImg.style.display = "block"; }
+      if (avatarPlaceholder) avatarPlaceholder.style.display = "none";
+      if (removeBtn) removeBtn.style.display = "";
+    } catch (error: any) {
+      showAuthError("Upload failed: " + error.message);
+    }
+    uploadBtn!.textContent = "Upload Photo";
+    (uploadBtn as HTMLButtonElement).disabled = false;
+    fileInput.value = "";
+  });
+
+  removeBtn?.addEventListener("click", async () => {
+    try {
+      await removeAvatar(user.uid);
+      if (avatarImg) { avatarImg.src = ""; avatarImg.style.display = "none"; }
+      if (avatarPlaceholder) avatarPlaceholder.style.display = "";
+      removeBtn.style.display = "none";
+    } catch (error: any) {
+      showAuthError("Failed to remove photo");
+    }
+  });
+
+  saveBtn?.addEventListener("click", async () => {
+    const username = usernameInput?.value.trim() || user.displayName || "";
+    const bio = bioInput?.value.trim() || "";
+
+    if (username.length < 3 || username.length > 32) {
+      showAuthError("Display name must be 3-32 characters");
+      return;
+    }
+
+    saveBtn.textContent = "Saving...";
+    (saveBtn as HTMLButtonElement).disabled = true;
+
+    try {
+      await user.updateProfile({ displayName: username });
+      await saveProfile(user.uid, { username, bio });
+      showAuthError("Profile saved!");
+    } catch (error: any) {
+      showAuthError("Save failed: " + error.message);
+    }
+
+    saveBtn.textContent = "Save Changes";
+    (saveBtn as HTMLButtonElement).disabled = false;
+  });
 }
 
 /* ===== DASHBOARD ===== */
@@ -331,30 +455,54 @@ function updateNavbar(user: any): void {
     if (heroButtons) heroButtons.classList.add("hidden");
     if (ctaLink) (ctaLink as HTMLElement).style.display = "none";
 
-    if (navbarLinks && !document.getElementById("logout-btn")) {
-      const dashBtn = document.createElement("a");
-      dashBtn.href = "/dashboard.html";
-      dashBtn.textContent = "Dashboard";
-      dashBtn.className = "btn btn-primary";
-      dashBtn.style.fontSize = "0.9rem";
-      dashBtn.style.padding = "6px 12px";
-      navbarLinks.appendChild(dashBtn);
+    if (navbarLinks && !document.getElementById("user-menu")) {
+      const menu = document.createElement("div");
+      menu.id = "user-menu";
+      menu.className = "user-menu";
 
-      const logoutBtn = document.createElement("button");
-      logoutBtn.id = "logout-btn";
-      logoutBtn.textContent = "Logout";
-      logoutBtn.className = "btn btn-secondary";
-      logoutBtn.style.fontSize = "0.9rem";
-      logoutBtn.style.padding = "6px 12px";
-      logoutBtn.addEventListener("click", async () => {
+      const avatar = document.createElement("img");
+      avatar.className = "nav-avatar";
+      avatar.alt = user.displayName || "User";
+      avatar.onerror = () => { avatar.style.display = "none"; };
+      loadProfile(user.uid).then(p => {
+        if (p.photoURL) avatar.src = p.photoURL;
+      });
+
+      const nameSpan = document.createElement("span");
+      nameSpan.className = "nav-username";
+      nameSpan.textContent = user.displayName || user.email?.split("@")[0] || "User";
+
+      const dropdown = document.createElement("div");
+      dropdown.className = "user-dropdown";
+      dropdown.innerHTML = `
+        <a href="/dashboard.html">Dashboard</a>
+        <a href="/settings.html">Settings</a>
+        <hr />
+        <button id="dropdown-logout">Logout</button>
+      `;
+
+      menu.appendChild(avatar);
+      menu.appendChild(nameSpan);
+      menu.appendChild(dropdown);
+      navbarLinks.appendChild(menu);
+
+      menu.addEventListener("click", (e) => {
+        e.stopPropagation();
+        dropdown.classList.toggle("open");
+      });
+
+      document.addEventListener("click", () => dropdown.classList.remove("open"));
+
+      document.getElementById("dropdown-logout")?.addEventListener("click", async () => {
         if (dashboardUnsub) dashboardUnsub();
         if (chatUnsub) chatUnsub();
         await auth.signOut();
         window.location.href = "/";
       });
-      navbarLinks.appendChild(logoutBtn);
     }
   } else {
+    const menu = document.getElementById("user-menu");
+    if (menu) menu.remove();
     if (heroButtons) heroButtons.classList.remove("hidden");
     if (ctaLink) (ctaLink as HTMLElement).style.display = "";
     loginLinks.forEach(el => {
