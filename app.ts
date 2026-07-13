@@ -437,6 +437,11 @@ function initAuthStateListener(currentPage: string): void {
       return;
     }
 
+    if (user && (currentPage === "" || currentPage === "index.html")) {
+      window.location.href = "/dashboard.html";
+      return;
+    }
+
     updateNavbar(user);
   });
 }
