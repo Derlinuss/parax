@@ -1095,6 +1095,111 @@ textarea::placeholder {
   cursor: not-allowed;
 }
 
+/* ===== MODAL OVERLAY ===== */
+
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 300;
+  animation: fadeIn 0.2s ease;
+}
+
+.modal-overlay.hidden {
+  display: none;
+}
+
+.modal-card {
+  background: var(--bg-secondary);
+  border-radius: var(--radius-lg);
+  padding: 32px 28px;
+  width: 90%;
+  max-width: 380px;
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.5);
+  border: 1px solid var(--border);
+}
+
+.modal-card h2 {
+  font-size: 1.2rem;
+  margin-bottom: 4px;
+}
+
+.modal-card .subtitle {
+  color: var(--text-secondary);
+  font-size: 0.88rem;
+  margin-bottom: 20px;
+}
+
+.modal-actions {
+  display: flex;
+  gap: 12px;
+  margin-top: 20px;
+}
+
+.modal-actions .btn {
+  flex: 1;
+}
+
+/* ===== PASSWORD FIELD (dashboard create room) ===== */
+
+.create-room {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.password-field {
+  overflow: hidden;
+  transition: max-height 0.25s ease, opacity 0.2s ease;
+  max-height: 60px;
+  opacity: 1;
+}
+
+.password-field.hidden {
+  max-height: 0;
+  opacity: 0;
+}
+
+.room-password-input {
+  width: 100%;
+  padding: 10px 12px;
+  background: var(--input-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text-primary);
+  font-size: 0.95rem;
+  outline: none;
+  transition: border-color var(--transition);
+}
+
+.room-password-input:focus {
+  border-color: var(--input-focus);
+}
+
+.room-password-input::placeholder {
+  color: var(--text-muted);
+}
+
+.form-row label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+  cursor: pointer;
+  user-select: none;
+}
+
+.form-row label input[type="checkbox"] {
+  accent-color: var(--brand);
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+}
+
 /* ===== SCROLLBAR ===== */
 
 ::-webkit-scrollbar {

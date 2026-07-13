@@ -105,15 +105,24 @@ function generateRoomCode(): string {
   return Math.floor(10000000000 + Math.random() * 90000000000).toString();
 }
 
-async function createRoom(): Promise<string> {
+async function createRoom(password?: string): Promise<string> {
   const code = generateRoomCode();
   const user = auth.currentUser;
-  await db.collection("rooms").doc(code).set({
+  const data: any = {
     createdBy: user.uid,
     createdByName: user.displayName || "Unknown",
     createdAt: firebase.firestore.FieldValue.serverTimestamp(),
-  });
+  };
+  if (password) {
+    data.password = password;
+  }
+  await db.collection("rooms").doc(code).set(data);
   return code;
+}
+
+async function getRoom(code: string): Promise<any> {
+  const doc = await db.collection("rooms").doc(code).get();
+  return doc.exists ? { code: doc.id, ...doc.data() } : null;
 }
 
 async function roomExists(code: string): Promise<boolean> {
@@ -298,12 +307,27 @@ function initDashboard(): void {
   const joinBtn = document.getElementById("join-room-btn");
   const codeInput = document.getElementById("room-code-input") as HTMLInputElement | null;
   const roomList = document.getElementById("room-list");
+  const passwordCheckbox = document.getElementById("enable-room-password") as HTMLInputElement | null;
+  const passwordField = document.getElementById("room-password-field");
+  const passwordInput = document.getElementById("room-password-input") as HTMLInputElement | null;
+
+  passwordCheckbox?.addEventListener("change", () => {
+    if (passwordField) {
+      passwordField.classList.toggle("hidden", !passwordCheckbox.checked);
+    }
+    if (passwordCheckbox.checked && passwordInput) {
+      passwordInput.focus();
+    }
+  });
 
   createBtn?.addEventListener("click", async () => {
+    const hasPassword = passwordCheckbox?.checked;
+    const roomPassword = hasPassword && passwordInput?.value.trim() ? passwordInput.value.trim() : undefined;
     createBtn.textContent = "Creating...";
     (createBtn as HTMLButtonElement).disabled = true;
     try {
-      const code = await createRoom();
+      const code = await createRoom(roomPassword);
+      if (roomPassword) sessionStorage.setItem("room_pass_" + code, roomPassword);
       window.location.href = `/chat.html?code=${code}`;
     } catch (error: any) {
       showAuthError(error.message || "Failed to create room");
@@ -312,12 +336,25 @@ function initDashboard(): void {
     }
   });
 
-  joinBtn?.addEventListener("click", () => {
+  joinBtn?.addEventListener("click", async () => {
     const code = codeInput?.value.trim();
-    if (code && code.length === 11 && /^\d{11}$/.test(code)) {
-      window.location.href = `/chat.html?code=${code}`;
-    } else {
+    if (!code || code.length !== 11 || !/^\d{11}$/.test(code)) {
       showAuthError("Enter a valid 11-digit code");
+      return;
+    }
+    try {
+      const room = await getRoom(code);
+      if (!room) {
+        showAuthError("Room not found");
+        return;
+      }
+      if (room.password) {
+        promptRoomPassword(code, room.password);
+      } else {
+        window.location.href = `/chat.html?code=${code}`;
+      }
+    } catch (error: any) {
+      showAuthError("Failed to check room: " + error.message);
     }
   });
 
@@ -336,12 +373,73 @@ function initDashboard(): void {
     } else {
       roomList.innerHTML = rooms.map(r => `
         <a href="/chat.html?code=${r.code}" class="room-item">
-          <span class="room-code">${r.code}</span>
+          <span class="room-code">${escapeHtml(r.code)}</span>
           <span class="room-date">${r.createdAt?.toDate?.().toLocaleDateString() || ""}</span>
         </a>
       `).join("");
     }
   });
+
+  const flash = sessionStorage.getItem("flash_error");
+  if (flash) {
+    sessionStorage.removeItem("flash_error");
+    showAuthError(flash);
+  }
+}
+
+function promptRoomPassword(code: string, correctPassword: string): void {
+  const modal = document.getElementById("password-modal");
+  const input = document.getElementById("password-prompt-input") as HTMLInputElement | null;
+  const confirmBtn = document.getElementById("password-prompt-confirm");
+  const cancelBtn = document.getElementById("password-prompt-cancel");
+  const infoText = document.getElementById("password-prompt-info");
+
+  if (!modal || !input || !confirmBtn || !cancelBtn) {
+    showAuthError("Something went wrong");
+    return;
+  }
+
+  if (infoText) infoText.textContent = "Room " + code + " is protected. Enter the password to continue.";
+  input.value = "";
+  input.focus();
+  modal.classList.remove("hidden");
+
+  const cleanup = () => {
+    modal.classList.add("hidden");
+    confirmBtn.removeEventListener("click", onConfirm);
+    cancelBtn.removeEventListener("click", onCancel);
+    input.removeEventListener("keypress", onKeypress);
+  };
+
+  const onConfirm = () => {
+    const entered = input.value.trim();
+    if (!entered) {
+      showAuthError("Please enter a password");
+      return;
+    }
+    if (entered === correctPassword) {
+      sessionStorage.setItem("room_pass_" + code, entered);
+      cleanup();
+      window.location.href = `/chat.html?code=${code}`;
+    } else {
+      showAuthError("Incorrect password");
+      input.value = "";
+      input.focus();
+    }
+  };
+
+  const onCancel = () => {
+    cleanup();
+  };
+
+  const onKeypress = (e: KeyboardEvent) => {
+    if (e.key === "Enter") onConfirm();
+    if (e.key === "Escape") onCancel();
+  };
+
+  confirmBtn.addEventListener("click", onConfirm);
+  cancelBtn.addEventListener("click", onCancel);
+  input.addEventListener("keypress", onKeypress);
 }
 
 /* ===== CHAT ===== */
@@ -373,33 +471,39 @@ function initChat(): void {
 
   if (headerEl) headerEl.textContent = roomCode;
 
-  roomExists(roomCode).then((exists) => {
-    if (!exists) {
+  getRoom(roomCode).then((room) => {
+    if (!room) {
       if (messagesEl) messagesEl.innerHTML = '<div class="chat-error">Room not found. <a href="/dashboard.html">Go back</a></div>';
+      return;
     }
-  });
+    if (room.password && sessionStorage.getItem("room_pass_" + roomCode) !== room.password) {
+      sessionStorage.setItem("flash_error", "This room requires a password");
+      window.location.href = "/dashboard.html";
+      return;
+    }
 
-  chatUnsub = loadMessages(roomCode, (messages) => {
-    if (!messagesEl) return;
-    const wasEmpty = messagesEl.querySelector(".chat-empty, .chat-loading") !== null;
-    if (messages.length === 0) {
-      messagesEl.innerHTML = '<div class="chat-empty">No messages yet. Say hello!</div>';
-    } else {
-      const isAtBottom = wasEmpty || messagesEl.scrollHeight - messagesEl.scrollTop - messagesEl.clientHeight < 100;
-      messagesEl.innerHTML = messages.map(m => {
-        const time = m.createdAt?.toDate?.()?.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) || "";
-        return `
-          <div class="message ${m.senderId === auth.currentUser?.uid ? "message-own" : ""}">
-            <div class="message-header">
-              <span class="message-sender">${escapeHtml(m.senderName)}</span>
-              <span class="message-time">${time}</span>
+    chatUnsub = loadMessages(roomCode, (messages) => {
+      if (!messagesEl) return;
+      const wasEmpty = messagesEl.querySelector(".chat-empty, .chat-loading") !== null;
+      if (messages.length === 0) {
+        messagesEl.innerHTML = '<div class="chat-empty">No messages yet. Say hello!</div>';
+      } else {
+        const isAtBottom = wasEmpty || messagesEl.scrollHeight - messagesEl.scrollTop - messagesEl.clientHeight < 100;
+        messagesEl.innerHTML = messages.map(m => {
+          const time = m.createdAt?.toDate?.()?.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) || "";
+          return `
+            <div class="message ${m.senderId === auth.currentUser?.uid ? "message-own" : ""}">
+              <div class="message-header">
+                <span class="message-sender">${escapeHtml(m.senderName)}</span>
+                <span class="message-time">${time}</span>
+              </div>
+              <div class="message-text">${escapeHtml(m.text)}</div>
             </div>
-            <div class="message-text">${escapeHtml(m.text)}</div>
-          </div>
-        `;
-      }).join("");
-      if (isAtBottom) messagesEl.scrollTop = messagesEl.scrollHeight;
-    }
+          `;
+        }).join("");
+        if (isAtBottom) messagesEl.scrollTop = messagesEl.scrollHeight;
+      }
+    });
   });
 
   const send = () => {

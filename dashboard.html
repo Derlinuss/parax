@@ -28,7 +28,20 @@
       <p class="subtitle">Create a new room or join an existing one</p>
 
       <div class="dashboard-actions">
-        <button id="create-room-btn" class="btn btn-primary btn-full">Create Room</button>
+        <div class="create-room">
+          <div class="form-row">
+            <label>
+              <input type="checkbox" id="enable-room-password" />
+              Set a password
+            </label>
+          </div>
+          <div id="room-password-field" class="password-field hidden">
+            <div class="password-wrapper">
+              <input type="text" id="room-password-input" class="room-password-input" placeholder="Room password" maxlength="50" autocomplete="off" />
+            </div>
+          </div>
+          <button id="create-room-btn" class="btn btn-primary btn-full">Create Room</button>
+        </div>
         <div class="divider"><span>or</span></div>
         <div class="join-room">
           <input type="text" id="room-code-input" placeholder="Enter 11-digit room code" maxlength="11" inputmode="numeric" />
@@ -38,6 +51,20 @@
 
       <div id="room-list" class="room-list">
         <p class="room-list-empty">No rooms yet. Create or join one!</p>
+      </div>
+    </div>
+  </div>
+
+  <div id="password-modal" class="modal-overlay hidden">
+    <div class="modal-card">
+      <h2>Room Password Required</h2>
+      <p id="password-prompt-info" class="subtitle">This room is protected. Enter the password to continue.</p>
+      <div class="password-wrapper">
+        <input type="text" id="password-prompt-input" class="room-password-input" placeholder="Enter room password" maxlength="50" autocomplete="off" />
+      </div>
+      <div class="modal-actions">
+        <button id="password-prompt-cancel" class="btn btn-secondary">Cancel</button>
+        <button id="password-prompt-confirm" class="btn btn-primary">Join</button>
       </div>
     </div>
   </div>

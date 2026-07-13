@@ -11,8 +11,8 @@ service cloud.firestore {
     match /rooms/{roomCode} {
       allow read: if request.auth != null;
       allow create: if request.auth != null;
+      allow update: if request.auth != null && request.auth.uid == resource.data.createdBy;
       allow delete: if request.auth != null && request.auth.uid == resource.data.createdBy;
-      allow update: if false;
     }
 
     // Messages: authenticated users can read, create their own messages
