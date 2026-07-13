@@ -134,13 +134,17 @@ async function sendMessage(roomCode: string, text: string): Promise<void> {
 function loadMessages(roomCode: string, callback: (messages: any[]) => void): () => void {
   return db.collection("messages")
     .where("roomCode", "==", roomCode)
-    .orderBy("createdAt", "asc")
     .onSnapshot((snapshot: any) => {
       const messages: any[] = [];
       snapshot.forEach((doc: any) => {
         messages.push({ id: doc.id, ...doc.data() });
       });
+      messages.sort((a, b) => (a.createdAt?.seconds || 0) - (b.createdAt?.seconds || 0));
       callback(messages);
+    }, (error: any) => {
+      console.error("Messages error:", error);
+      const el = document.getElementById("chat-messages");
+      if (el) el.innerHTML = `<div class="chat-error">Failed to load messages. Check console for details.</div>`;
     });
 }
 
@@ -149,13 +153,15 @@ function loadUserRooms(callback: (rooms: any[]) => void): () => void {
   if (!user) return () => {};
   return db.collection("rooms")
     .where("createdBy", "==", user.uid)
-    .orderBy("createdAt", "desc")
     .onSnapshot((snapshot: any) => {
       const rooms: any[] = [];
       snapshot.forEach((doc: any) => {
         rooms.push({ code: doc.id, ...doc.data() });
       });
+      rooms.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
       callback(rooms);
+    }, (error: any) => {
+      console.error("Rooms error:", error);
     });
 }
 
@@ -251,10 +257,11 @@ function initChat(): void {
 
   chatUnsub = loadMessages(roomCode, (messages) => {
     if (!messagesEl) return;
+    const wasEmpty = messagesEl.querySelector(".chat-empty, .chat-loading") !== null;
     if (messages.length === 0) {
       messagesEl.innerHTML = '<div class="chat-empty">No messages yet. Say hello!</div>';
     } else {
-      const isAtBottom = messagesEl.scrollHeight - messagesEl.scrollTop - messagesEl.clientHeight < 100;
+      const isAtBottom = wasEmpty || messagesEl.scrollHeight - messagesEl.scrollTop - messagesEl.clientHeight < 100;
       messagesEl.innerHTML = messages.map(m => {
         const time = m.createdAt?.toDate?.()?.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) || "";
         return `
@@ -273,7 +280,9 @@ function initChat(): void {
 
   const send = () => {
     if (!inputEl?.value.trim()) return;
-    sendMessage(roomCode, inputEl.value);
+    sendMessage(roomCode, inputEl.value).catch((err: any) => {
+      showAuthError("Failed to send: " + err.message);
+    });
     inputEl.value = "";
     inputEl.focus();
   };

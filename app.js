@@ -113,13 +113,18 @@ async function sendMessage(roomCode, text) {
 function loadMessages(roomCode, callback) {
     return db.collection("messages")
         .where("roomCode", "==", roomCode)
-        .orderBy("createdAt", "asc")
         .onSnapshot((snapshot) => {
         const messages = [];
         snapshot.forEach((doc) => {
             messages.push({ id: doc.id, ...doc.data() });
         });
+        messages.sort((a, b) => (a.createdAt?.seconds || 0) - (b.createdAt?.seconds || 0));
         callback(messages);
+    }, (error) => {
+        console.error("Messages error:", error);
+        const el = document.getElementById("chat-messages");
+        if (el)
+            el.innerHTML = `<div class="chat-error">Failed to load messages. Check console for details.</div>`;
     });
 }
 function loadUserRooms(callback) {
@@ -128,13 +133,15 @@ function loadUserRooms(callback) {
         return () => { };
     return db.collection("rooms")
         .where("createdBy", "==", user.uid)
-        .orderBy("createdAt", "desc")
         .onSnapshot((snapshot) => {
         const rooms = [];
         snapshot.forEach((doc) => {
             rooms.push({ code: doc.id, ...doc.data() });
         });
+        rooms.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
         callback(rooms);
+    }, (error) => {
+        console.error("Rooms error:", error);
     });
 }
 /* ===== DASHBOARD ===== */
@@ -221,11 +228,12 @@ function initChat() {
     chatUnsub = loadMessages(roomCode, (messages) => {
         if (!messagesEl)
             return;
+        const wasEmpty = messagesEl.querySelector(".chat-empty, .chat-loading") !== null;
         if (messages.length === 0) {
             messagesEl.innerHTML = '<div class="chat-empty">No messages yet. Say hello!</div>';
         }
         else {
-            const isAtBottom = messagesEl.scrollHeight - messagesEl.scrollTop - messagesEl.clientHeight < 100;
+            const isAtBottom = wasEmpty || messagesEl.scrollHeight - messagesEl.scrollTop - messagesEl.clientHeight < 100;
             messagesEl.innerHTML = messages.map(m => {
                 const time = m.createdAt?.toDate?.()?.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) || "";
                 return `
@@ -245,7 +253,9 @@ function initChat() {
     const send = () => {
         if (!inputEl?.value.trim())
             return;
-        sendMessage(roomCode, inputEl.value);
+        sendMessage(roomCode, inputEl.value).catch((err) => {
+            showAuthError("Failed to send: " + err.message);
+        });
         inputEl.value = "";
         inputEl.focus();
     };
