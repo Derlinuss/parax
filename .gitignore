@@ -1,0 +1,6 @@
+serviceAccountKey.json
+webappparax-firebase-adminsdk-fbsvc-3cebc94660.json
+node_modules/
+dist/
+functions/lib/
+server/dist/
