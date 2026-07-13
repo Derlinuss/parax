@@ -1,5 +1,6 @@
 // Firebase Compat SDK - loaded via CDN script tags in HTML
 declare const firebase: any;
+declare const Para: any;
 
 const firebaseConfig = {
   apiKey: "AIzaSyBi6UCjNt6RxB-RrKmDSHuC3Ax9khqzcbg",
@@ -164,6 +165,7 @@ async function ensureParaxOfficial(): Promise<boolean> {
     });
     return true;
   } catch (e) {
+    if (typeof Para !== "undefined") Para.capture(e, { type: "manual", context: "ensureParaxOfficial" });
     return false;
   }
 }
@@ -257,6 +259,7 @@ function loadUserServers(callback: (servers: any[]) => void): () => void {
       });
     }, (error: any) => {
       console.error("Server memberships error:", error);
+      if (typeof Para !== "undefined") Para.capture(error, { type: "firestore", context: "loadUserServers" });
       callback([]);
     });
 
@@ -284,6 +287,7 @@ function loadServerChannels(serverCode: string, callback: (channels: any[]) => v
       callback(channels);
     }, (error: any) => {
       console.error("Channels error:", error);
+      if (typeof Para !== "undefined") Para.capture(error, { type: "firestore", context: "loadServerChannels" });
     });
 }
 
@@ -313,6 +317,7 @@ function loadChannelMessages(channelId: string, callback: (messages: any[]) => v
       callback(messages);
     }, (error: any) => {
       console.error("Channel messages error:", error);
+      if (typeof Para !== "undefined") Para.capture(error, { type: "firestore", context: "loadChannelMessages" });
       const el = document.getElementById("server-messages");
       if (el) el.innerHTML = `<div class="chat-error">Failed to load messages.</div>`;
     });
@@ -344,6 +349,7 @@ function loadMessages(roomCode: string, callback: (messages: any[]) => void): ()
       callback(messages);
     }, (error: any) => {
       console.error("Messages error:", error);
+      if (typeof Para !== "undefined") Para.capture(error, { type: "firestore", context: "loadMessages" });
       const el = document.getElementById("chat-messages");
       if (el) el.innerHTML = `<div class="chat-error">Failed to load messages. Check console for details.</div>`;
     });
@@ -363,6 +369,7 @@ function loadUserRooms(callback: (rooms: any[]) => void): () => void {
       callback(rooms);
     }, (error: any) => {
       console.error("Rooms error:", error);
+      if (typeof Para !== "undefined") Para.capture(error, { type: "firestore", context: "loadUserRooms" });
     });
 }
 
@@ -1091,6 +1098,7 @@ function updateNavbar(user: any): void {
 
 function showAuthError(message: string): void {
   if (!message) return;
+  if (typeof Para !== "undefined") Para.capture(message, { type: "ui", context: "showAuthError" });
   const errorEl = document.createElement("div");
   errorEl.className = "auth-error";
   errorEl.textContent = message;

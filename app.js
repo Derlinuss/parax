@@ -141,6 +141,8 @@ async function ensureParaxOfficial() {
         return true;
     }
     catch (e) {
+        if (typeof Para !== "undefined")
+            Para.capture(e, { type: "manual", context: "ensureParaxOfficial" });
         return false;
     }
 }
@@ -233,6 +235,8 @@ function loadUserServers(callback) {
         });
     }, (error) => {
         console.error("Server memberships error:", error);
+        if (typeof Para !== "undefined")
+            Para.capture(error, { type: "firestore", context: "loadUserServers" });
         callback([]);
     });
     return () => membershipQuery();
@@ -256,6 +260,8 @@ function loadServerChannels(serverCode, callback) {
         callback(channels);
     }, (error) => {
         console.error("Channels error:", error);
+        if (typeof Para !== "undefined")
+            Para.capture(error, { type: "firestore", context: "loadServerChannels" });
     });
 }
 /* ===== CHANNEL MESSAGE FUNCTIONS ===== */
@@ -283,6 +289,8 @@ function loadChannelMessages(channelId, callback) {
         callback(messages);
     }, (error) => {
         console.error("Channel messages error:", error);
+        if (typeof Para !== "undefined")
+            Para.capture(error, { type: "firestore", context: "loadChannelMessages" });
         const el = document.getElementById("server-messages");
         if (el)
             el.innerHTML = `<div class="chat-error">Failed to load messages.</div>`;
@@ -313,6 +321,8 @@ function loadMessages(roomCode, callback) {
         callback(messages);
     }, (error) => {
         console.error("Messages error:", error);
+        if (typeof Para !== "undefined")
+            Para.capture(error, { type: "firestore", context: "loadMessages" });
         const el = document.getElementById("chat-messages");
         if (el)
             el.innerHTML = `<div class="chat-error">Failed to load messages. Check console for details.</div>`;
@@ -333,6 +343,8 @@ function loadUserRooms(callback) {
         callback(rooms);
     }, (error) => {
         console.error("Rooms error:", error);
+        if (typeof Para !== "undefined")
+            Para.capture(error, { type: "firestore", context: "loadUserRooms" });
     });
 }
 /* ===== PROFILE FUNCTIONS ===== */
@@ -1057,6 +1069,8 @@ function updateNavbar(user) {
 function showAuthError(message) {
     if (!message)
         return;
+    if (typeof Para !== "undefined")
+        Para.capture(message, { type: "ui", context: "showAuthError" });
     const errorEl = document.createElement("div");
     errorEl.className = "auth-error";
     errorEl.textContent = message;
