@@ -108,6 +108,149 @@ async function roomExists(code) {
     const doc = await db.collection("rooms").doc(code).get();
     return doc.exists;
 }
+/* ===== SERVER FUNCTIONS ===== */
+function generateServerCode() {
+    return Math.floor(10000000000 + Math.random() * 90000000000).toString();
+}
+async function createServer(name) {
+    const code = generateServerCode();
+    const user = auth.currentUser;
+    await db.collection("servers").doc(code).set({
+        name,
+        ownerId: user.uid,
+        ownerName: user.displayName || "Unknown",
+        createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+    });
+    await db.collection("servers").doc(code).collection("channels").add({
+        name: "general",
+        createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+    });
+    await db.collection("serverMembers").add({
+        userId: user.uid,
+        serverCode: code,
+        joinedAt: firebase.firestore.FieldValue.serverTimestamp(),
+    });
+    return code;
+}
+async function getServer(code) {
+    const doc = await db.collection("servers").doc(code).get();
+    return doc.exists ? { code: doc.id, ...doc.data() } : null;
+}
+async function serverExists(code) {
+    const doc = await db.collection("servers").doc(code).get();
+    return doc.exists;
+}
+async function joinServer(code) {
+    const user = auth.currentUser;
+    const exists = await serverExists(code);
+    if (!exists)
+        return false;
+    const existing = await db.collection("serverMembers")
+        .where("userId", "==", user.uid)
+        .where("serverCode", "==", code)
+        .get();
+    if (!existing.empty)
+        return true;
+    await db.collection("serverMembers").add({
+        userId: user.uid,
+        serverCode: code,
+        joinedAt: firebase.firestore.FieldValue.serverTimestamp(),
+    });
+    return true;
+}
+async function isServerMember(code) {
+    const user = auth.currentUser;
+    const snap = await db.collection("serverMembers")
+        .where("userId", "==", user.uid)
+        .where("serverCode", "==", code)
+        .get();
+    return !snap.empty;
+}
+function loadUserServers(callback) {
+    const user = auth.currentUser;
+    if (!user)
+        return () => { };
+    const unsubs = [];
+    const membershipQuery = db.collection("serverMembers")
+        .where("userId", "==", user.uid)
+        .onSnapshot(async (snapshot) => {
+        const serverCodes = [];
+        snapshot.forEach((doc) => {
+            const data = doc.data();
+            if (data.serverCode)
+                serverCodes.push(data.serverCode);
+        });
+        if (serverCodes.length === 0) {
+            callback([]);
+            return;
+        }
+        const servers = [];
+        let pending = serverCodes.length;
+        serverCodes.forEach((code) => {
+            getServer(code).then((server) => {
+                if (server)
+                    servers.push(server);
+                pending--;
+                if (pending === 0) {
+                    servers.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
+                    callback(servers);
+                }
+            });
+        });
+    }, (error) => {
+        console.error("Server memberships error:", error);
+    });
+    unsubs.push(membershipQuery);
+    return () => unsubs.forEach((u) => u());
+}
+/* ===== CHANNEL FUNCTIONS ===== */
+async function createChannel(serverCode, name) {
+    const ref = await db.collection("servers").doc(serverCode).collection("channels").add({
+        name: name.toLowerCase().replace(/\s+/g, "-"),
+        createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+    });
+    return ref.id;
+}
+function loadServerChannels(serverCode, callback) {
+    return db.collection("servers").doc(serverCode).collection("channels")
+        .orderBy("createdAt", "asc")
+        .onSnapshot((snapshot) => {
+        const channels = [];
+        snapshot.forEach((doc) => {
+            channels.push({ id: doc.id, ...doc.data() });
+        });
+        callback(channels);
+    }, (error) => {
+        console.error("Channels error:", error);
+    });
+}
+/* ===== CHANNEL MESSAGE FUNCTIONS ===== */
+async function sendChannelMessage(channelId, text) {
+    const user = auth.currentUser;
+    if (!text.trim())
+        return;
+    await db.collection("messages").add({
+        channelId,
+        senderId: user.uid,
+        senderName: user.displayName || "Anonymous",
+        text: text.trim(),
+        createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+    });
+}
+function loadChannelMessages(channelId, callback) {
+    return db.collection("messages")
+        .where("channelId", "==", channelId)
+        .onSnapshot((snapshot) => {
+        const messages = [];
+        snapshot.forEach((doc) => {
+            messages.push({ id: doc.id, ...doc.data() });
+        });
+        messages.sort((a, b) => (a.createdAt?.seconds || 0) - (b.createdAt?.seconds || 0));
+        callback(messages);
+    }, (error) => {
+        console.error("Channel messages error:", error);
+    });
+}
 /* ===== MESSAGE FUNCTIONS ===== */
 async function sendMessage(roomCode, text) {
     const user = auth.currentUser;
@@ -280,143 +423,393 @@ function initSettings() {
         saveBtn.disabled = false;
     });
 }
-/* ===== DASHBOARD ===== */
+/* ===== DASHBOARD (Discord-style) ===== */
 let dashboardUnsub = null;
+let serverChannelsUnsub = null;
+let channelMessagesUnsub = null;
+let currentServerCode = null;
+let currentChannelId = null;
+let userServersCache = [];
 function initDashboard() {
-    const createBtn = document.getElementById("create-room-btn");
-    const joinBtn = document.getElementById("join-room-btn");
-    const codeInput = document.getElementById("room-code-input");
-    const roomList = document.getElementById("room-list");
-    const passwordCheckbox = document.getElementById("enable-room-password");
-    const passwordField = document.getElementById("room-password-field");
-    const passwordInput = document.getElementById("room-password-input");
-    passwordCheckbox?.addEventListener("change", () => {
-        if (passwordField) {
-            passwordField.classList.toggle("hidden", !passwordCheckbox.checked);
+    const serverList = document.getElementById("server-list");
+    const channelSidebar = document.getElementById("channel-sidebar");
+    const serverNameEl = document.getElementById("server-name");
+    const channelList = document.getElementById("channel-list");
+    const chatArea = document.getElementById("chat-area");
+    const welcomeState = document.getElementById("welcome-state");
+    const homeState = document.getElementById("home-state");
+    const messagesEl = document.getElementById("server-messages");
+    const inputEl = document.getElementById("server-message-input");
+    const sendBtn = document.getElementById("server-send-btn");
+    const channelNameEl = document.getElementById("channel-name");
+    // User profile in channel sidebar
+    const profileName = document.getElementById("profile-name");
+    const profileAvatar = document.getElementById("profile-avatar");
+    const logoutBtn = document.getElementById("profile-logout-btn");
+    const settingsBtn = document.getElementById("profile-settings-btn");
+    const user = auth.currentUser;
+    if (user) {
+        if (profileName)
+            profileName.textContent = user.displayName || user.email?.split("@")[0] || "User";
+        if (profileAvatar) {
+            profileAvatar.innerHTML = `<div class="initials">${(user.displayName || user.email || "U")[0].toUpperCase()}</div>`;
         }
-        if (passwordCheckbox.checked && passwordInput) {
-            passwordInput.focus();
+        loadProfile(user.uid).then((p) => {
+            if (p.photoURL && profileAvatar) {
+                profileAvatar.innerHTML = `<img src="${p.photoURL}" alt="" />`;
+            }
+        });
+    }
+    logoutBtn?.addEventListener("click", async () => {
+        cleanupSubs();
+        await auth.signOut();
+        window.location.href = "/";
+    });
+    settingsBtn?.addEventListener("click", () => {
+        window.location.href = "/settings.html";
+    });
+    // Server list
+    dashboardUnsub = loadUserServers((servers) => {
+        userServersCache = servers;
+        renderServerList(servers);
+        // If current server was removed, go back
+        if (currentServerCode && !servers.find((s) => s.code === currentServerCode)) {
+            selectServer(null);
         }
     });
-    createBtn?.addEventListener("click", async () => {
-        const hasPassword = passwordCheckbox?.checked;
-        const roomPassword = hasPassword && passwordInput?.value.trim() ? passwordInput.value.trim() : undefined;
-        createBtn.textContent = "Creating...";
-        createBtn.disabled = true;
-        try {
-            const code = await createRoom(roomPassword);
-            if (roomPassword)
-                sessionStorage.setItem("room_pass_" + code, roomPassword);
-            window.location.href = `/chat.html?code=${code}`;
-        }
-        catch (error) {
-            showAuthError(error.message || "Failed to create room");
-            createBtn.textContent = "Create Room";
-            createBtn.disabled = false;
-        }
+    // Home button
+    document.getElementById("home-btn")?.addEventListener("click", () => {
+        selectServer(null);
     });
-    joinBtn?.addEventListener("click", async () => {
-        const code = codeInput?.value.trim();
-        if (!code || code.length !== 11 || !/^\d{11}$/.test(code)) {
-            showAuthError("Enter a valid 11-digit code");
+    // Add server button
+    document.getElementById("add-server-btn")?.addEventListener("click", () => {
+        showModal("create-server-modal");
+        document.getElementById("server-name-input")?.focus();
+    });
+    // Create server modal
+    document.getElementById("create-server-cancel")?.addEventListener("click", () => {
+        hideModal("create-server-modal");
+    });
+    document.getElementById("create-server-confirm")?.addEventListener("click", async () => {
+        const input = document.getElementById("server-name-input");
+        const name = input?.value.trim();
+        if (!name) {
+            showAuthError("Server name is required");
             return;
         }
         try {
-            const room = await getRoom(code);
-            if (!room) {
-                showAuthError("Room not found");
+            hideModal("create-server-modal");
+            input.value = "";
+            const code = await createServer(name);
+            showAuthError("Server created! Code: " + code);
+        }
+        catch (err) {
+            showAuthError("Failed to create server: " + err.message);
+        }
+    });
+    document.getElementById("server-name-input")?.addEventListener("keypress", (e) => {
+        if (e.key === "Enter")
+            document.getElementById("create-server-confirm")?.click();
+    });
+    // Join server modal
+    document.getElementById("join-server-btn")?.addEventListener("click", () => {
+        showModal("join-server-modal");
+        document.getElementById("join-server-input")?.focus();
+    });
+    document.getElementById("join-server-cancel")?.addEventListener("click", () => {
+        hideModal("join-server-modal");
+    });
+    document.getElementById("join-server-confirm")?.addEventListener("click", async () => {
+        const input = document.getElementById("join-server-input");
+        const code = input?.value.trim();
+        if (!code || code.length !== 11 || !/^\d{11}$/.test(code)) {
+            showAuthError("Enter a valid 11-digit server code");
+            return;
+        }
+        try {
+            const joined = await joinServer(code);
+            if (!joined) {
+                showAuthError("Server not found");
                 return;
             }
-            if (room.password) {
-                promptRoomPassword(code, room.password);
-            }
-            else {
-                window.location.href = `/chat.html?code=${code}`;
-            }
+            hideModal("join-server-modal");
+            input.value = "";
+            showAuthError("Joined server!");
         }
-        catch (error) {
-            showAuthError("Failed to check room: " + error.message);
+        catch (err) {
+            showAuthError("Failed to join: " + err.message);
         }
     });
-    codeInput?.addEventListener("keypress", (e) => {
+    document.getElementById("join-server-input")?.addEventListener("keypress", (e) => {
         if (e.key === "Enter")
-            joinBtn?.click();
+            document.getElementById("join-server-confirm")?.click();
     });
-    codeInput?.addEventListener("input", () => {
-        codeInput.value = codeInput.value.replace(/\D/g, "").slice(0, 11);
+    document.getElementById("join-server-input")?.addEventListener("input", (e) => {
+        const el = e.target;
+        el.value = el.value.replace(/\D/g, "").slice(0, 11);
     });
-    dashboardUnsub = loadUserRooms((rooms) => {
-        if (!roomList)
+    // Create channel modal
+    document.getElementById("add-channel-btn")?.addEventListener("click", () => {
+        showModal("create-channel-modal");
+        document.getElementById("channel-name-input")?.focus();
+    });
+    document.getElementById("create-channel-cancel")?.addEventListener("click", () => {
+        hideModal("create-channel-modal");
+    });
+    document.getElementById("create-channel-confirm")?.addEventListener("click", async () => {
+        const input = document.getElementById("channel-name-input");
+        const name = input?.value.trim().toLowerCase().replace(/\s+/g, "-");
+        if (!name) {
+            showAuthError("Channel name is required");
             return;
-        if (rooms.length === 0) {
-            roomList.innerHTML = '<p class="room-list-empty">No rooms yet. Create or join one!</p>';
         }
-        else {
-            roomList.innerHTML = rooms.map(r => `
-        <a href="/chat.html?code=${r.code}" class="room-item">
-          <span class="room-code">${escapeHtml(r.code)}</span>
-          <span class="room-date">${r.createdAt?.toDate?.().toLocaleDateString() || ""}</span>
-        </a>
-      `).join("");
+        if (!currentServerCode)
+            return;
+        try {
+            hideModal("create-channel-modal");
+            input.value = "";
+            await createChannel(currentServerCode, name);
+        }
+        catch (err) {
+            showAuthError("Failed to create channel: " + err.message);
         }
     });
+    document.getElementById("channel-name-input")?.addEventListener("keypress", (e) => {
+        if (e.key === "Enter")
+            document.getElementById("create-channel-confirm")?.click();
+    });
+    // Leave server
+    document.getElementById("server-leave-btn")?.addEventListener("click", async () => {
+        if (!currentServerCode || !user)
+            return;
+        if (!confirm("Leave this server?"))
+            return;
+        try {
+            const snap = await db.collection("serverMembers")
+                .where("userId", "==", user.uid)
+                .where("serverCode", "==", currentServerCode)
+                .get();
+            snap.forEach((doc) => doc.ref.delete());
+            selectServer(null);
+        }
+        catch (err) {
+            showAuthError("Failed to leave: " + err.message);
+        }
+    });
+    // Send message
+    const send = () => {
+        const text = inputEl?.value.trim();
+        if (!text || !currentChannelId)
+            return;
+        sendChannelMessage(currentChannelId, text).catch((err) => {
+            showAuthError("Failed to send: " + err.message);
+        });
+        if (inputEl) {
+            inputEl.value = "";
+            inputEl.focus();
+        }
+    };
+    sendBtn?.addEventListener("click", send);
+    inputEl?.addEventListener("keypress", (e) => {
+        if (e.key === "Enter")
+            send();
+    });
+    // Flash messages
     const flash = sessionStorage.getItem("flash_error");
     if (flash) {
         sessionStorage.removeItem("flash_error");
         showAuthError(flash);
     }
 }
-function promptRoomPassword(code, correctPassword) {
-    const modal = document.getElementById("password-modal");
-    const input = document.getElementById("password-prompt-input");
-    const confirmBtn = document.getElementById("password-prompt-confirm");
-    const cancelBtn = document.getElementById("password-prompt-cancel");
-    const infoText = document.getElementById("password-prompt-info");
-    if (!modal || !input || !confirmBtn || !cancelBtn) {
-        showAuthError("Something went wrong");
+/* ===== SERVER RENDERING ===== */
+function renderServerList(servers) {
+    const serverList = document.getElementById("server-list");
+    if (!serverList)
+        return;
+    serverList.innerHTML = servers.map((s) => {
+        const isActive = s.code === currentServerCode;
+        const initial = (s.name || "S")[0].toUpperCase();
+        return `
+      <div class="server-item ${isActive ? "active" : ""}" data-code="${s.code}" title="${escapeHtml(s.name)}">
+        <span class="server-initials">${initial}</span>
+      </div>
+    `;
+    }).join("");
+    serverList.querySelectorAll(".server-item").forEach((el) => {
+        el.addEventListener("click", () => {
+            const code = el.dataset.code;
+            if (code)
+                selectServer(code);
+        });
+    });
+}
+/* ===== SERVER / CHANNEL SELECTION ===== */
+function selectServer(code) {
+    // Cleanup previous channel subs
+    if (channelMessagesUnsub) {
+        channelMessagesUnsub();
+        channelMessagesUnsub = null;
+    }
+    if (serverChannelsUnsub) {
+        serverChannelsUnsub();
+        serverChannelsUnsub = null;
+    }
+    currentServerCode = code;
+    currentChannelId = null;
+    const channelSidebar = document.getElementById("channel-sidebar");
+    const serverNameEl = document.getElementById("server-name");
+    const welcomeState = document.getElementById("welcome-state");
+    const homeState = document.getElementById("home-state");
+    const chatArea = document.getElementById("chat-area");
+    // Update home button active state
+    const homeBtn = document.getElementById("home-btn");
+    if (homeBtn)
+        homeBtn.classList.toggle("active", !code);
+    // Update server list active state
+    document.querySelectorAll(".server-item[data-code]").forEach((el) => {
+        el.classList.toggle("active", el.dataset.code === code);
+    });
+    if (!code) {
+        // Show home
+        channelSidebar?.classList.add("hidden");
+        welcomeState?.classList.add("hidden");
+        chatArea?.classList.add("hidden");
+        homeState?.classList.remove("hidden");
+        renderHomeRooms();
         return;
     }
-    if (infoText)
-        infoText.textContent = "Room " + code + " is protected. Enter the password to continue.";
-    input.value = "";
-    input.focus();
-    modal.classList.remove("hidden");
-    const cleanup = () => {
-        modal.classList.add("hidden");
-        confirmBtn.removeEventListener("click", onConfirm);
-        cancelBtn.removeEventListener("click", onCancel);
-        input.removeEventListener("keypress", onKeypress);
-    };
-    const onConfirm = () => {
-        const entered = input.value.trim();
-        if (!entered) {
-            showAuthError("Please enter a password");
-            return;
+    homeState?.classList.add("hidden");
+    welcomeState?.classList.add("hidden");
+    chatArea?.classList.add("hidden");
+    channelSidebar?.classList.remove("hidden");
+    const server = userServersCache.find((s) => s.code === code);
+    if (serverNameEl)
+        serverNameEl.textContent = server?.name || "Server";
+    // Load channels
+    serverChannelsUnsub = loadServerChannels(code, (channels) => {
+        renderChannelList(channels, code);
+        if (channels.length > 0 && !currentChannelId) {
+            selectChannel(channels[0].id, channels[0].name, code);
         }
-        if (entered === correctPassword) {
-            sessionStorage.setItem("room_pass_" + code, entered);
-            cleanup();
-            window.location.href = `/chat.html?code=${code}`;
+    });
+}
+function renderChannelList(channels, serverCode) {
+    const channelList = document.getElementById("channel-list");
+    if (!channelList)
+        return;
+    channelList.innerHTML = channels.map((ch) => {
+        const isActive = ch.id === currentChannelId;
+        return `
+      <div class="channel-item ${isActive ? "active" : ""}" data-channel-id="${ch.id}" data-channel-name="${escapeHtml(ch.name)}">
+        <span class="channel-hash">#</span>
+        <span class="channel-name">${escapeHtml(ch.name)}</span>
+      </div>
+    `;
+    }).join("");
+    channelList.querySelectorAll(".channel-item").forEach((el) => {
+        el.addEventListener("click", () => {
+            const id = el.dataset.channelId;
+            const name = el.dataset.channelName;
+            if (id && name)
+                selectChannel(id, name, serverCode);
+        });
+    });
+}
+function selectChannel(channelId, channelName, serverCode) {
+    if (channelMessagesUnsub) {
+        channelMessagesUnsub();
+        channelMessagesUnsub = null;
+    }
+    currentChannelId = channelId;
+    // Update channel list active state
+    document.querySelectorAll(".channel-item").forEach((el) => {
+        el.classList.toggle("active", el.dataset.channelId === channelId);
+    });
+    const chatArea = document.getElementById("chat-area");
+    const welcomeState = document.getElementById("welcome-state");
+    const channelNameEl = document.getElementById("channel-name");
+    const messagesEl = document.getElementById("server-messages");
+    const inputEl = document.getElementById("server-message-input");
+    welcomeState?.classList.add("hidden");
+    chatArea?.classList.remove("hidden");
+    if (channelNameEl)
+        channelNameEl.textContent = channelName;
+    if (inputEl)
+        inputEl.placeholder = "Message #" + channelName;
+    if (messagesEl)
+        messagesEl.innerHTML = '<div class="chat-loading">Loading messages...</div>';
+    channelMessagesUnsub = loadChannelMessages(channelId, (messages) => {
+        if (!messagesEl)
+            return;
+        if (messages.length === 0) {
+            messagesEl.innerHTML = '<div class="chat-empty">No messages yet. Start the conversation!</div>';
         }
         else {
-            showAuthError("Incorrect password");
-            input.value = "";
-            input.focus();
+            const wasEmpty = messagesEl.querySelector(".chat-empty, .chat-loading") !== null;
+            const isAtBottom = wasEmpty || messagesEl.scrollHeight - messagesEl.scrollTop - messagesEl.clientHeight < 100;
+            messagesEl.innerHTML = messages.map((m) => {
+                const time = m.createdAt?.toDate?.()?.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) || "";
+                return `
+          <div class="message ${m.senderId === auth.currentUser?.uid ? "message-own" : ""}">
+            <div class="message-header">
+              <span class="message-sender">${escapeHtml(m.senderName)}</span>
+              <span class="message-time">${time}</span>
+            </div>
+            <div class="message-text">${escapeHtml(m.text)}</div>
+          </div>
+        `;
+            }).join("");
+            if (isAtBottom)
+                messagesEl.scrollTop = messagesEl.scrollHeight;
         }
-    };
-    const onCancel = () => {
-        cleanup();
-    };
-    const onKeypress = (e) => {
-        if (e.key === "Enter")
-            onConfirm();
-        if (e.key === "Escape")
-            onCancel();
-    };
-    confirmBtn.addEventListener("click", onConfirm);
-    cancelBtn.addEventListener("click", onCancel);
-    input.addEventListener("keypress", onKeypress);
+    });
 }
+/* ===== HOME ROOMS (old room system) ===== */
+function renderHomeRooms() {
+    const container = document.getElementById("home-rooms");
+    if (!container)
+        return;
+    loadUserRooms((rooms) => {
+        if (rooms.length === 0) {
+            container.innerHTML = '<p style="color: var(--text-muted); text-align: center;">No rooms yet. Use the + button to create a server!</p>';
+        }
+        else {
+            container.innerHTML = rooms.map((r) => `
+        <a href="/chat.html?code=${r.code}" class="home-room-item">
+          <span class="home-room-code">${escapeHtml(r.code)}</span>
+          <span>${r.createdAt?.toDate?.()?.toLocaleDateString() || ""}</span>
+        </a>
+      `).join("");
+        }
+    });
+}
+/* ===== MODAL HELPERS ===== */
+function showModal(id) {
+    const el = document.getElementById(id);
+    if (el)
+        el.classList.remove("hidden");
+}
+function hideModal(id) {
+    const el = document.getElementById(id);
+    if (el)
+        el.classList.add("hidden");
+}
+/* ===== CLEANUP ===== */
+function cleanupSubs() {
+    if (dashboardUnsub) {
+        dashboardUnsub();
+        dashboardUnsub = null;
+    }
+    if (serverChannelsUnsub) {
+        serverChannelsUnsub();
+        serverChannelsUnsub = null;
+    }
+    if (channelMessagesUnsub) {
+        channelMessagesUnsub();
+        channelMessagesUnsub = null;
+    }
+}
+function promptRoomPassword(code, correctPassword) { }
 /* ===== CHAT ===== */
 let chatUnsub = null;
 let currentRoomCode = null;
