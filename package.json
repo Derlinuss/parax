@@ -1,4 +1,7 @@
 {
+  "scripts": {
+    "start": "cd server && npx tsx src/server.ts"
+  },
   "devDependencies": {
     "typescript": "^7.0.2"
   }
