@@ -109,8 +109,40 @@ async function roomExists(code) {
     return doc.exists;
 }
 /* ===== SERVER FUNCTIONS ===== */
+const PARAX_OFFICIAL_CODE = "00000000001";
 function generateServerCode() {
     return Math.floor(10000000000 + Math.random() * 90000000000).toString();
+}
+function memberDocId(uid, serverCode) {
+    return uid + "|" + serverCode;
+}
+async function ensureParaxOfficial() {
+    const exists = await serverExists(PARAX_OFFICIAL_CODE);
+    if (exists)
+        return true;
+    try {
+        const admin = auth.currentUser;
+        if (!admin)
+            return false;
+        await db.collection("servers").doc(PARAX_OFFICIAL_CODE).set({
+            name: "Parax Official",
+            ownerId: admin.uid,
+            ownerName: "Parax",
+            createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+        });
+        await db.collection("servers").doc(PARAX_OFFICIAL_CODE).collection("channels").add({
+            name: "announcements",
+            createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+        });
+        await db.collection("servers").doc(PARAX_OFFICIAL_CODE).collection("channels").add({
+            name: "general",
+            createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+        });
+        return true;
+    }
+    catch (e) {
+        return false;
+    }
 }
 async function createServer(name) {
     const code = generateServerCode();
@@ -125,7 +157,7 @@ async function createServer(name) {
         name: "general",
         createdAt: firebase.firestore.FieldValue.serverTimestamp(),
     });
-    await db.collection("serverMembers").add({
+    await db.collection("serverMembers").doc(memberDocId(user.uid, code)).set({
         userId: user.uid,
         serverCode: code,
         joinedAt: firebase.firestore.FieldValue.serverTimestamp(),
@@ -142,16 +174,22 @@ async function serverExists(code) {
 }
 async function joinServer(code) {
     const user = auth.currentUser;
-    const exists = await serverExists(code);
-    if (!exists)
-        return false;
-    const existing = await db.collection("serverMembers")
-        .where("userId", "==", user.uid)
-        .where("serverCode", "==", code)
-        .get();
-    if (!existing.empty)
+    let exists = await serverExists(code);
+    if (!exists) {
+        if (code === PARAX_OFFICIAL_CODE) {
+            const ok = await ensureParaxOfficial();
+            if (!ok)
+                return false;
+        }
+        else {
+            return false;
+        }
+    }
+    const docId = memberDocId(user.uid, code);
+    const existing = await db.collection("serverMembers").doc(docId).get();
+    if (existing.exists)
         return true;
-    await db.collection("serverMembers").add({
+    await db.collection("serverMembers").doc(docId).set({
         userId: user.uid,
         serverCode: code,
         joinedAt: firebase.firestore.FieldValue.serverTimestamp(),
@@ -160,20 +198,16 @@ async function joinServer(code) {
 }
 async function isServerMember(code) {
     const user = auth.currentUser;
-    const snap = await db.collection("serverMembers")
-        .where("userId", "==", user.uid)
-        .where("serverCode", "==", code)
-        .get();
-    return !snap.empty;
+    const doc = await db.collection("serverMembers").doc(memberDocId(user.uid, code)).get();
+    return doc.exists;
 }
 function loadUserServers(callback) {
     const user = auth.currentUser;
     if (!user)
         return () => { };
-    const unsubs = [];
     const membershipQuery = db.collection("serverMembers")
         .where("userId", "==", user.uid)
-        .onSnapshot(async (snapshot) => {
+        .onSnapshot((snapshot) => {
         const serverCodes = [];
         snapshot.forEach((doc) => {
             const data = doc.data();
@@ -184,8 +218,8 @@ function loadUserServers(callback) {
             callback([]);
             return;
         }
-        const servers = [];
         let pending = serverCodes.length;
+        const servers = [];
         serverCodes.forEach((code) => {
             getServer(code).then((server) => {
                 if (server)
@@ -199,9 +233,9 @@ function loadUserServers(callback) {
         });
     }, (error) => {
         console.error("Server memberships error:", error);
+        callback([]);
     });
-    unsubs.push(membershipQuery);
-    return () => unsubs.forEach((u) => u());
+    return () => membershipQuery();
 }
 /* ===== CHANNEL FUNCTIONS ===== */
 async function createChannel(serverCode, name) {
@@ -249,6 +283,9 @@ function loadChannelMessages(channelId, callback) {
         callback(messages);
     }, (error) => {
         console.error("Channel messages error:", error);
+        const el = document.getElementById("server-messages");
+        if (el)
+            el.innerHTML = `<div class="chat-error">Failed to load messages.</div>`;
     });
 }
 /* ===== MESSAGE FUNCTIONS ===== */
@@ -481,6 +518,22 @@ function initDashboard() {
     document.getElementById("home-btn")?.addEventListener("click", () => {
         selectServer(null);
     });
+    // Official server button
+    document.getElementById("official-server-btn")?.addEventListener("click", async () => {
+        const code = PARAX_OFFICIAL_CODE;
+        try {
+            const joined = await joinServer(code);
+            if (joined) {
+                selectServer(code);
+            }
+            else {
+                showAuthError("Could not join Parax Official");
+            }
+        }
+        catch (err) {
+            showAuthError("Failed: " + err.message);
+        }
+    });
     // Add server button
     document.getElementById("add-server-btn")?.addEventListener("click", () => {
         showModal("create-server-modal");
@@ -501,7 +554,7 @@ function initDashboard() {
             hideModal("create-server-modal");
             input.value = "";
             const code = await createServer(name);
-            showAuthError("Server created! Code: " + code);
+            selectServer(code);
         }
         catch (err) {
             showAuthError("Failed to create server: " + err.message);
@@ -534,7 +587,7 @@ function initDashboard() {
             }
             hideModal("join-server-modal");
             input.value = "";
-            showAuthError("Joined server!");
+            selectServer(code);
         }
         catch (err) {
             showAuthError("Failed to join: " + err.message);
@@ -582,14 +635,14 @@ function initDashboard() {
     document.getElementById("server-leave-btn")?.addEventListener("click", async () => {
         if (!currentServerCode || !user)
             return;
+        if (currentServerCode === PARAX_OFFICIAL_CODE) {
+            showAuthError("Cannot leave the official server");
+            return;
+        }
         if (!confirm("Leave this server?"))
             return;
         try {
-            const snap = await db.collection("serverMembers")
-                .where("userId", "==", user.uid)
-                .where("serverCode", "==", currentServerCode)
-                .get();
-            snap.forEach((doc) => doc.ref.delete());
+            await db.collection("serverMembers").doc(memberDocId(user.uid, currentServerCode)).delete();
             selectServer(null);
         }
         catch (err) {
@@ -669,6 +722,11 @@ function selectServer(code) {
     document.querySelectorAll(".server-item[data-code]").forEach((el) => {
         el.classList.toggle("active", el.dataset.code === code);
     });
+    // Update official server active state
+    const officialBtn = document.getElementById("official-server-btn");
+    if (officialBtn) {
+        officialBtn.classList.toggle("active", code === PARAX_OFFICIAL_CODE);
+    }
     if (!code) {
         // Show home
         channelSidebar?.classList.add("hidden");
@@ -683,8 +741,15 @@ function selectServer(code) {
     chatArea?.classList.add("hidden");
     channelSidebar?.classList.remove("hidden");
     const server = userServersCache.find((s) => s.code === code);
-    if (serverNameEl)
+    if (serverNameEl) {
         serverNameEl.textContent = server?.name || "Server";
+        if (!server) {
+            getServer(code).then((s) => {
+                if (s && serverNameEl)
+                    serverNameEl.textContent = s.name;
+            });
+        }
+    }
     // Load channels
     serverChannelsUnsub = loadServerChannels(code, (channels) => {
         renderChannelList(channels, code);

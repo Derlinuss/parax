@@ -32,7 +32,17 @@
       </div>
       <div class="server-divider"></div>
       <div id="server-list"></div>
-      <div class="server-item server-add" id="add-server-btn" title="Add Server">
+      <div class="server-divider"></div>
+      <div class="server-section-label">Public</div>
+      <div class="server-item server-official" id="official-server-btn" title="Parax Official">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 2L2 7l10 5 10-5-10-5z"/>
+          <path d="M2 17l10 5 10-5"/>
+          <path d="M2 12l10 5 10-5"/>
+        </svg>
+      </div>
+      <div class="server-divider"></div>
+      <div class="server-item server-add" id="add-server-btn" title="Create Server">
         <span>+</span>
       </div>
       <div class="server-item server-join" id="join-server-btn" title="Join Server">
@@ -87,13 +97,20 @@
             <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
           </svg>
         </div>
-        <h2>Select a server</h2>
-        <p>Choose a server from the left sidebar to start chatting.</p>
+        <h2>Pick a server to start</h2>
+        <p>Select a server from the left sidebar, or create your own to get the conversation going.</p>
       </div>
 
       <!-- Home state (old rooms) -->
       <div id="home-state" class="empty-state hidden">
-        <h2>Your Rooms</h2>
+        <div class="empty-state-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
+            <polyline points="9 22 9 12 15 12 15 22"/>
+          </svg>
+        </div>
+        <h2>Welcome home</h2>
+        <p>You're not in any servers yet. Create one or join with a code to get started.</p>
         <div class="home-rooms" id="home-rooms"></div>
       </div>
 
