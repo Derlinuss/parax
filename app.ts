@@ -1,5 +1,4 @@
 // Firebase Compat SDK - loaded via CDN script tags in HTML
-// We use the compat SDK because it works with vanilla JS without a bundler
 declare const firebase: any;
 
 const firebaseConfig = {
@@ -14,12 +13,31 @@ const firebaseConfig = {
 
 firebase.initializeApp(firebaseConfig);
 const auth = firebase.auth();
+const db = firebase.firestore();
+db.settings({ merge: true });
 
 document.addEventListener("DOMContentLoaded", () => {
+  const page = window.location.pathname.split("/").pop() || "";
+
   initPasswordToggles();
-  initSignupValidation();
-  initLoginValidation();
-  initAuthStateListener();
+
+  if (page === "signup.html" || page.startsWith("signup")) {
+    initSignupValidation();
+  }
+
+  if (page === "login.html" || page.startsWith("login")) {
+    initLoginValidation();
+  }
+
+  initAuthStateListener(page);
+
+  if (page === "dashboard.html") {
+    initDashboard();
+  }
+
+  if (page === "chat.html") {
+    initChat();
+  }
 });
 
 /* ===== FIREBASE AUTH ===== */
@@ -32,63 +50,320 @@ function setPersistence(remember: boolean): void {
   }
 }
 
-function signupWithEmail(email: string, password: string): Promise<any> {
-  return auth.createUserWithEmailAndPassword(email, password);
+async function handleSignup(username: string, email: string, password: string): Promise<void> {
+  const cred = await auth.createUserWithEmailAndPassword(email, password);
+  const user = cred.user;
+  await user.updateProfile({ displayName: username });
+  await db.collection("users").doc(user.uid).set({
+    username,
+    email,
+    createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+  });
 }
 
-function loginWithEmail(email: string, password: string): Promise<any> {
-  return auth.signInWithEmailAndPassword(email, password);
+async function handleLogin(email: string, password: string): Promise<void> {
+  await auth.signInWithEmailAndPassword(email, password);
 }
 
-function signInWithGoogle(): Promise<any> {
+async function handleGoogleAuth(): Promise<void> {
   const provider = new firebase.auth.GoogleAuthProvider();
-  return auth.signInWithPopup(provider);
+  const cred = await auth.signInWithPopup(provider);
+  if (cred.additionalUserInfo?.isNewUser) {
+    const user = cred.user;
+    await db.collection("users").doc(user.uid).set({
+      username: user.displayName || "User",
+      email: user.email,
+      createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+    });
+  }
 }
 
-async function handleAuthSuccess(): Promise<void> {
-  window.location.href = "/";
+function handleAuthError(error: any): string {
+  const code = error.code;
+  if (code === "auth/user-not-found" || code === "auth/invalid-credential") {
+    return "Invalid email or password.";
+  }
+  if (code === "auth/email-already-in-use") {
+    return "An account with this email already exists.";
+  }
+  if (code === "auth/weak-password") {
+    return "Password must be at least 6 characters.";
+  }
+  if (code === "auth/popup-closed-by-user") {
+    return "";
+  }
+  return error.message || "Something went wrong.";
 }
+
+/* ===== ROOM FUNCTIONS ===== */
+
+function generateRoomCode(): string {
+  return Math.floor(10000000000 + Math.random() * 90000000000).toString();
+}
+
+async function createRoom(): Promise<string> {
+  const code = generateRoomCode();
+  const user = auth.currentUser;
+  await db.collection("rooms").doc(code).set({
+    createdBy: user.uid,
+    createdByName: user.displayName || "Unknown",
+    createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+  });
+  return code;
+}
+
+async function roomExists(code: string): Promise<boolean> {
+  const doc = await db.collection("rooms").doc(code).get();
+  return doc.exists;
+}
+
+/* ===== MESSAGE FUNCTIONS ===== */
+
+async function sendMessage(roomCode: string, text: string): Promise<void> {
+  const user = auth.currentUser;
+  if (!text.trim()) return;
+  await db.collection("messages").add({
+    roomCode,
+    senderId: user.uid,
+    senderName: user.displayName || "Anonymous",
+    text: text.trim(),
+    createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+  });
+}
+
+function loadMessages(roomCode: string, callback: (messages: any[]) => void): () => void {
+  return db.collection("messages")
+    .where("roomCode", "==", roomCode)
+    .orderBy("createdAt", "asc")
+    .onSnapshot((snapshot: any) => {
+      const messages: any[] = [];
+      snapshot.forEach((doc: any) => {
+        messages.push({ id: doc.id, ...doc.data() });
+      });
+      callback(messages);
+    });
+}
+
+function loadUserRooms(callback: (rooms: any[]) => void): () => void {
+  const user = auth.currentUser;
+  if (!user) return () => {};
+  return db.collection("rooms")
+    .where("createdBy", "==", user.uid)
+    .orderBy("createdAt", "desc")
+    .onSnapshot((snapshot: any) => {
+      const rooms: any[] = [];
+      snapshot.forEach((doc: any) => {
+        rooms.push({ code: doc.id, ...doc.data() });
+      });
+      callback(rooms);
+    });
+}
+
+/* ===== DASHBOARD ===== */
+
+let dashboardUnsub: (() => void) | null = null;
+
+function initDashboard(): void {
+  const createBtn = document.getElementById("create-room-btn");
+  const joinBtn = document.getElementById("join-room-btn");
+  const codeInput = document.getElementById("room-code-input") as HTMLInputElement | null;
+  const roomList = document.getElementById("room-list");
+
+  createBtn?.addEventListener("click", async () => {
+    createBtn.textContent = "Creating...";
+    (createBtn as HTMLButtonElement).disabled = true;
+    try {
+      const code = await createRoom();
+      window.location.href = `/chat.html?code=${code}`;
+    } catch (error: any) {
+      showAuthError(error.message || "Failed to create room");
+      createBtn.textContent = "Create Room";
+      (createBtn as HTMLButtonElement).disabled = false;
+    }
+  });
+
+  joinBtn?.addEventListener("click", () => {
+    const code = codeInput?.value.trim();
+    if (code && code.length === 11 && /^\d{11}$/.test(code)) {
+      window.location.href = `/chat.html?code=${code}`;
+    } else {
+      showAuthError("Enter a valid 11-digit code");
+    }
+  });
+
+  codeInput?.addEventListener("keypress", (e) => {
+    if (e.key === "Enter") joinBtn?.click();
+  });
+
+  codeInput?.addEventListener("input", () => {
+    codeInput.value = codeInput.value.replace(/\D/g, "").slice(0, 11);
+  });
+
+  dashboardUnsub = loadUserRooms((rooms) => {
+    if (!roomList) return;
+    if (rooms.length === 0) {
+      roomList.innerHTML = '<p class="room-list-empty">No rooms yet. Create or join one!</p>';
+    } else {
+      roomList.innerHTML = rooms.map(r => `
+        <a href="/chat.html?code=${r.code}" class="room-item">
+          <span class="room-code">${r.code}</span>
+          <span class="room-date">${r.createdAt?.toDate?.().toLocaleDateString() || ""}</span>
+        </a>
+      `).join("");
+    }
+  });
+}
+
+/* ===== CHAT ===== */
+
+let chatUnsub: (() => void) | null = null;
+let currentRoomCode: string | null = null;
+
+function escapeHtml(text: string): string {
+  const div = document.createElement("div");
+  div.textContent = text;
+  return div.innerHTML;
+}
+
+function initChat(): void {
+  const params = new URLSearchParams(window.location.search);
+  const roomCode = params.get("code");
+
+  if (!roomCode) {
+    window.location.href = "/dashboard.html";
+    return;
+  }
+
+  currentRoomCode = roomCode;
+  const headerEl = document.getElementById("room-code-display");
+  const messagesEl = document.getElementById("chat-messages");
+  const inputEl = document.getElementById("message-input") as HTMLInputElement | null;
+  const sendBtn = document.getElementById("send-btn");
+  const leaveBtn = document.getElementById("leave-room-btn");
+
+  if (headerEl) headerEl.textContent = roomCode;
+
+  roomExists(roomCode).then((exists) => {
+    if (!exists) {
+      if (messagesEl) messagesEl.innerHTML = '<div class="chat-error">Room not found. <a href="/dashboard.html">Go back</a></div>';
+    }
+  });
+
+  chatUnsub = loadMessages(roomCode, (messages) => {
+    if (!messagesEl) return;
+    if (messages.length === 0) {
+      messagesEl.innerHTML = '<div class="chat-empty">No messages yet. Say hello!</div>';
+    } else {
+      const isAtBottom = messagesEl.scrollHeight - messagesEl.scrollTop - messagesEl.clientHeight < 100;
+      messagesEl.innerHTML = messages.map(m => {
+        const time = m.createdAt?.toDate?.()?.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) || "";
+        return `
+          <div class="message ${m.senderId === auth.currentUser?.uid ? "message-own" : ""}">
+            <div class="message-header">
+              <span class="message-sender">${escapeHtml(m.senderName)}</span>
+              <span class="message-time">${time}</span>
+            </div>
+            <div class="message-text">${escapeHtml(m.text)}</div>
+          </div>
+        `;
+      }).join("");
+      if (isAtBottom) messagesEl.scrollTop = messagesEl.scrollHeight;
+    }
+  });
+
+  const send = () => {
+    if (!inputEl?.value.trim()) return;
+    sendMessage(roomCode, inputEl.value);
+    inputEl.value = "";
+    inputEl.focus();
+  };
+
+  sendBtn?.addEventListener("click", send);
+  inputEl?.addEventListener("keypress", (e) => {
+    if (e.key === "Enter") send();
+  });
+
+  leaveBtn?.addEventListener("click", () => {
+    window.location.href = "/dashboard.html";
+  });
+}
+
+/* ===== AUTH STATE LISTENER ===== */
+
+function initAuthStateListener(currentPage: string): void {
+  auth.onAuthStateChanged((user: any) => {
+    if (!user) {
+      if (currentPage === "dashboard.html" || currentPage === "chat.html") {
+        window.location.href = "/login.html";
+        return;
+      }
+    }
+
+    if (user && (currentPage === "login.html" || currentPage === "signup.html")) {
+      window.location.href = "/dashboard.html";
+      return;
+    }
+
+    updateNavbar(user);
+  });
+}
+
+function updateNavbar(user: any): void {
+  const loginLinks = document.querySelectorAll('[href="login.html"], [href="signup.html"]');
+  const navbarLinks = document.querySelector(".navbar-links");
+  const heroButtons = document.querySelector(".hero-buttons");
+  const ctaLink = document.querySelector('.cta-section a[href="signup.html"]');
+
+  if (user) {
+    loginLinks.forEach(el => {
+      const btn = el as HTMLElement;
+      btn.style.display = "none";
+    });
+    if (heroButtons) heroButtons.classList.add("hidden");
+    if (ctaLink) (ctaLink as HTMLElement).style.display = "none";
+
+    if (navbarLinks && !document.getElementById("logout-btn")) {
+      const dashBtn = document.createElement("a");
+      dashBtn.href = "/dashboard.html";
+      dashBtn.textContent = "Dashboard";
+      dashBtn.className = "btn btn-primary";
+      dashBtn.style.fontSize = "0.9rem";
+      dashBtn.style.padding = "6px 12px";
+      navbarLinks.appendChild(dashBtn);
+
+      const logoutBtn = document.createElement("button");
+      logoutBtn.id = "logout-btn";
+      logoutBtn.textContent = "Logout";
+      logoutBtn.className = "btn btn-secondary";
+      logoutBtn.style.fontSize = "0.9rem";
+      logoutBtn.style.padding = "6px 12px";
+      logoutBtn.addEventListener("click", async () => {
+        if (dashboardUnsub) dashboardUnsub();
+        if (chatUnsub) chatUnsub();
+        await auth.signOut();
+        window.location.href = "/";
+      });
+      navbarLinks.appendChild(logoutBtn);
+    }
+  } else {
+    if (heroButtons) heroButtons.classList.remove("hidden");
+    if (ctaLink) (ctaLink as HTMLElement).style.display = "";
+    loginLinks.forEach(el => {
+      const btn = el as HTMLElement;
+      btn.style.display = "";
+    });
+  }
+}
+
+/* ===== UI UTILITIES ===== */
 
 function showAuthError(message: string): void {
+  if (!message) return;
   const errorEl = document.createElement("div");
   errorEl.className = "auth-error";
-  errorEl.style.cssText = "position: fixed; top: 20px; right: 20px; background: #ed4245; color: white; padding: 12px 20px; border-radius: 8px; font-size: 0.9rem; z-index: 1000;";
   errorEl.textContent = message;
   document.body.appendChild(errorEl);
   setTimeout(() => errorEl.remove(), 5000);
-}
-
-function initAuthStateListener(): void {
-  const currentPage = window.location.pathname.split("/").pop() || "";
-
-  auth.onAuthStateChanged((user: any) => {
-    const loginLinks = document.querySelectorAll('[href="login.html"], [href="signup.html"]');
-    const navbarLinks = document.querySelector(".navbar-links");
-
-    if (user) {
-      if (currentPage === "login.html" || currentPage === "signup.html") {
-        window.location.href = "/";
-        return;
-      }
-
-      loginLinks.forEach(el => {
-        const button = el as HTMLElement;
-        button.style.display = "none";
-      });
-
-      if (navbarLinks && !document.getElementById("logout-btn")) {
-        const logoutBtn = document.createElement("button");
-        logoutBtn.id = "logout-btn";
-        logoutBtn.textContent = "Logout";
-        logoutBtn.className = "btn btn-secondary";
-        logoutBtn.addEventListener("click", async () => {
-          await auth.signOut();
-          window.location.href = "/";
-        });
-        navbarLinks.appendChild(logoutBtn);
-      }
-    }
-  });
 }
 
 /* ===== PASSWORD VISIBILITY TOGGLE ===== */
@@ -101,7 +376,6 @@ function initPasswordToggles(): void {
       if (!wrapper) return;
       const input = wrapper.querySelector<HTMLInputElement>("input");
       if (!input) return;
-
       if (input.type === "password") {
         input.type = "text";
         toggle.textContent = "Hide";
@@ -118,9 +392,7 @@ function initPasswordToggles(): void {
 function setError(input: HTMLInputElement, message: string): void {
   input.classList.add("error");
   input.classList.remove("valid");
-  const errorEl = input
-    .closest(".form-group")
-    ?.querySelector<HTMLElement>(".error-message");
+  const errorEl = input.closest(".form-group")?.querySelector<HTMLElement>(".error-message");
   if (errorEl) {
     errorEl.textContent = message;
     errorEl.classList.add("visible");
@@ -130,9 +402,7 @@ function setError(input: HTMLInputElement, message: string): void {
 function setValid(input: HTMLInputElement): void {
   input.classList.remove("error");
   input.classList.add("valid");
-  const errorEl = input
-    .closest(".form-group")
-    ?.querySelector<HTMLElement>(".error-message");
+  const errorEl = input.closest(".form-group")?.querySelector<HTMLElement>(".error-message");
   if (errorEl) {
     errorEl.classList.remove("visible");
   }
@@ -140,9 +410,7 @@ function setValid(input: HTMLInputElement): void {
 
 function clearStatus(input: HTMLInputElement): void {
   input.classList.remove("error", "valid");
-  const errorEl = input
-    .closest(".form-group")
-    ?.querySelector<HTMLElement>(".error-message");
+  const errorEl = input.closest(".form-group")?.querySelector<HTMLElement>(".error-message");
   if (errorEl) {
     errorEl.classList.remove("visible");
   }
@@ -177,13 +445,13 @@ function initSignupValidation(): void {
   const googleBtn = document.getElementById("google-signup") as HTMLButtonElement | null;
 
   if (googleBtn) {
-    googleBtn.addEventListener("click", async (e) => {
-      e.preventDefault();
+    googleBtn.addEventListener("click", async () => {
       try {
-        await signInWithGoogle();
-        await handleAuthSuccess();
+        await handleGoogleAuth();
+        window.location.href = "/dashboard.html";
       } catch (error: any) {
-        showAuthError(error.message || "Google sign-up failed");
+        const msg = handleAuthError(error);
+        if (msg) showAuthError(msg);
       }
     });
   }
@@ -291,14 +559,19 @@ function initSignupValidation(): void {
       }
     }
 
-    if (valid && emailInput && passwordInput) {
+    if (valid && usernameInput && emailInput && passwordInput) {
       try {
         const rememberCheckbox = form.querySelector<HTMLInputElement>('input[name="remember"]');
         setPersistence(rememberCheckbox?.checked ?? false);
-        await signupWithEmail(emailInput.value.trim(), passwordInput.value);
-        await handleAuthSuccess();
+        await handleSignup(
+          usernameInput.value.trim(),
+          emailInput.value.trim(),
+          passwordInput.value
+        );
+        window.location.href = "/dashboard.html";
       } catch (error: any) {
-        showAuthError(error.message || "Sign up failed");
+        const msg = handleAuthError(error);
+        if (msg) showAuthError(msg);
       }
     }
   });
@@ -315,13 +588,13 @@ function initLoginValidation(): void {
   const googleBtn = document.getElementById("google-login") as HTMLButtonElement | null;
 
   if (googleBtn) {
-    googleBtn.addEventListener("click", async (e) => {
-      e.preventDefault();
+    googleBtn.addEventListener("click", async () => {
       try {
-        await signInWithGoogle();
-        await handleAuthSuccess();
+        await handleGoogleAuth();
+        window.location.href = "/dashboard.html";
       } catch (error: any) {
-        showAuthError(error.message || "Google login failed");
+        const msg = handleAuthError(error);
+        if (msg) showAuthError(msg);
       }
     });
   }
@@ -379,10 +652,11 @@ function initLoginValidation(): void {
       try {
         const rememberCheckbox = form.querySelector<HTMLInputElement>('input[name="remember"]');
         setPersistence(rememberCheckbox?.checked ?? false);
-        await loginWithEmail(emailInput.value.trim(), passwordInput.value);
-        await handleAuthSuccess();
+        await handleLogin(emailInput.value.trim(), passwordInput.value);
+        window.location.href = "/dashboard.html";
       } catch (error: any) {
-        showAuthError(error.message || "Login failed");
+        const msg = handleAuthError(error);
+        if (msg) showAuthError(msg);
       }
     }
   });
