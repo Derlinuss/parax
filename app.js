@@ -759,6 +759,8 @@ function selectServer(code) {
     });
 }
 function renderChannelList(channels, serverCode) {
+    if (serverCode !== currentServerCode)
+        return;
     const channelList = document.getElementById("channel-list");
     if (!channelList)
         return;
@@ -781,6 +783,8 @@ function renderChannelList(channels, serverCode) {
     });
 }
 function selectChannel(channelId, channelName, serverCode) {
+    if (serverCode !== currentServerCode)
+        return;
     if (channelMessagesUnsub) {
         channelMessagesUnsub();
         channelMessagesUnsub = null;
@@ -830,13 +834,18 @@ function selectChannel(channelId, channelName, serverCode) {
     });
 }
 /* ===== HOME ROOMS (old room system) ===== */
+let homeRoomsUnsub = null;
 function renderHomeRooms() {
     const container = document.getElementById("home-rooms");
     if (!container)
         return;
-    loadUserRooms((rooms) => {
+    if (homeRoomsUnsub) {
+        homeRoomsUnsub();
+        homeRoomsUnsub = null;
+    }
+    homeRoomsUnsub = loadUserRooms((rooms) => {
         if (rooms.length === 0) {
-            container.innerHTML = '<p style="color: var(--text-muted); text-align: center;">No rooms yet. Use the + button to create a server!</p>';
+            container.innerHTML = '<p style="color: var(--text-muted); text-align: center;">You\'re not in any servers yet. Create one or join with a code!</p>';
         }
         else {
             container.innerHTML = rooms.map((r) => `
@@ -872,6 +881,10 @@ function cleanupSubs() {
     if (channelMessagesUnsub) {
         channelMessagesUnsub();
         channelMessagesUnsub = null;
+    }
+    if (homeRoomsUnsub) {
+        homeRoomsUnsub();
+        homeRoomsUnsub = null;
     }
 }
 function promptRoomPassword(code, correctPassword) { }
@@ -1020,10 +1033,7 @@ function updateNavbar(user) {
             });
             document.addEventListener("click", () => dropdown.classList.remove("open"));
             document.getElementById("dropdown-logout")?.addEventListener("click", async () => {
-                if (dashboardUnsub)
-                    dashboardUnsub();
-                if (chatUnsub)
-                    chatUnsub();
+                cleanupSubs();
                 await auth.signOut();
                 window.location.href = "/";
             });
