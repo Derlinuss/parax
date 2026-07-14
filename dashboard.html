@@ -61,6 +61,11 @@
     <div id="channel-sidebar" class="channel-sidebar hidden">
       <div class="channel-header" id="channel-header">
         <h3 id="server-name">Server</h3>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="channel-header-chevron"><polyline points="6 9 12 15 18 9"/></svg>
+        <div class="server-dropdown" id="server-dropdown">
+          <button id="server-roles-btn">Roles</button>
+          <button id="server-members-btn">Members</button>
+        </div>
       </div>
       <div class="channel-section">
         <div class="channel-section-title">Text Channels</div>
@@ -142,6 +147,14 @@
         </div>
         <div id="voice-container" class="voice-container hidden"></div>
       </div>
+
+      <!-- Member List Sidebar -->
+      <div id="member-list-sidebar" class="member-list-sidebar hidden">
+        <div class="member-list-header">
+          <span id="member-count">0 members</span>
+        </div>
+        <div id="member-list" class="member-list"></div>
+      </div>
     </div>
   </div>
 
@@ -206,8 +219,34 @@
     </div>
   </div>
 
-  <!-- Voice Container (inside chat area) -->
-  <div id="voice-container" class="voice-container hidden"></div>
+  <!-- Roles Modal -->
+  <div id="roles-modal" class="modal-overlay hidden">
+    <div class="modal-card modal-card-wide">
+      <h2>Server Roles</h2>
+      <p class="subtitle">Manage roles and permissions for this server.</p>
+      <div id="roles-list" class="roles-list"></div>
+      <div class="modal-actions">
+        <button class="btn btn-secondary" id="create-role-btn">+ New Role</button>
+        <button class="btn btn-primary" id="roles-modal-close">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Create Role Modal -->
+  <div id="create-role-modal" class="modal-overlay hidden">
+    <div class="modal-card">
+      <h2>Create Role</h2>
+      <p class="subtitle">Give your new role a name.</p>
+      <div class="form-group">
+        <label>Role Name</label>
+        <input type="text" id="role-name-input" placeholder="new role" maxlength="30" />
+      </div>
+      <div class="modal-actions">
+        <button class="btn btn-secondary" id="create-role-cancel">Cancel</button>
+        <button class="btn btn-primary" id="create-role-confirm">Create</button>
+      </div>
+    </div>
+  </div>
 
   <!-- Voice Status Bar -->
   <div id="voice-bar" class="voice-bar hidden">

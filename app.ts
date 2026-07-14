@@ -188,8 +188,168 @@ async function createServer(name: string): Promise<string> {
     userId: user.uid,
     serverCode: code,
     joinedAt: firebase.firestore.FieldValue.serverTimestamp(),
+    roles: ["admin"],
   });
+  await createDefaultRoles(code);
   return code;
+}
+
+/* ===== ROLE FUNCTIONS ===== */
+
+const DEFAULT_PERMISSIONS = {
+  administrator: false,
+  manage_roles: false,
+  manage_channels: false,
+  manage_server: false,
+  kick_members: false,
+  send_messages: true,
+  connect: true,
+  speak: true,
+};
+
+const ADMIN_PERMISSIONS = {
+  administrator: true,
+  manage_roles: true,
+  manage_channels: true,
+  manage_server: true,
+  kick_members: true,
+  send_messages: true,
+  connect: true,
+  speak: true,
+};
+
+async function createDefaultRoles(serverCode: string): Promise<void> {
+  const rolesRef = db.collection("servers").doc(serverCode).collection("roles");
+  await rolesRef.add({
+    name: "@everyone",
+    color: "#949ba4",
+    priority: 0,
+    permissions: DEFAULT_PERMISSIONS,
+    isDefault: true,
+    createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+  });
+  await rolesRef.add({
+    name: "admin",
+    color: "#ed4245",
+    priority: 100,
+    permissions: ADMIN_PERMISSIONS,
+    isDefault: true,
+    createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+  });
+}
+
+async function getServerOwner(serverCode: string): Promise<string | null> {
+  const doc = await db.collection("servers").doc(serverCode).get();
+  return doc.exists ? doc.data()?.ownerId || null : null;
+}
+
+async function userHasPermission(serverCode: string, permission: string): Promise<boolean> {
+  const user = auth.currentUser;
+  if (!user) return false;
+
+  const ownerId = await getServerOwner(serverCode);
+  if (ownerId === user.uid) return true;
+
+  const memberDoc = await db.collection("serverMembers").doc(memberDocId(user.uid, serverCode)).get();
+  if (!memberDoc.exists) return false;
+  const memberData = memberDoc.data() || {};
+  const userRoleIds: string[] = memberData.roles || [];
+
+  const rolesSnapshot = await db.collection("servers").doc(serverCode).collection("roles").get();
+  const roles = rolesSnapshot.docs.map((d: any) => d.data());
+
+  for (const role of roles) {
+    if (!userRoleIds.includes(role.name) && role.name !== "@everyone") continue;
+    if (role.name === "@everyone" || userRoleIds.includes(role.name)) {
+      if (role.permissions?.administrator) return true;
+      if (role.permissions?.[permission]) return true;
+    }
+  }
+  return false;
+}
+
+async function getUserRoles(serverCode: string): Promise<{ name: string; color: string }[]> {
+  const user = auth.currentUser;
+  if (!user) return [];
+
+  const memberDoc = await db.collection("serverMembers").doc(memberDocId(user.uid, serverCode)).get();
+  if (!memberDoc.exists) return [];
+  const memberData = memberDoc.data() || {};
+  const userRoleNames: string[] = memberData.roles || [];
+
+  const rolesSnapshot = await db.collection("servers").doc(serverCode).collection("roles").get();
+  const roles = rolesSnapshot.docs
+    .map((d: any) => d.data())
+    .filter((r: any) => r.name === "@everyone" || userRoleNames.includes(r.name))
+    .sort((a: any, b: any) => (b.priority || 0) - (a.priority || 0));
+
+  return roles.map((r: any) => ({ name: r.name, color: r.color || "#949ba4" }));
+}
+
+async function getTopRoleColor(serverCode: string): Promise<string | null> {
+  const roles = await getUserRoles(serverCode);
+  return roles.length > 0 ? roles[0].color : null;
+}
+
+function loadServerRoles(serverCode: string, callback: (roles: any[]) => void): () => void {
+  return db.collection("servers").doc(serverCode).collection("roles")
+    .orderBy("priority", "desc")
+    .onSnapshot((snapshot: any) => {
+      const roles: any[] = [];
+      snapshot.forEach((doc: any) => {
+        roles.push({ id: doc.id, ...doc.data() });
+      });
+      callback(roles);
+    }, (error: any) => {
+      console.error("Roles error:", error);
+      if (typeof Para !== "undefined") Para.capture(error, { type: "firestore", context: "loadServerRoles" });
+    });
+}
+
+function loadServerMembers(serverCode: string, callback: (members: any[]) => void): () => void {
+  return db.collection("serverMembers")
+    .where("serverCode", "==", serverCode)
+    .onSnapshot(async (snapshot: any) => {
+      const memberEntries: any[] = [];
+      snapshot.forEach((doc: any) => {
+        memberEntries.push({ id: doc.id, ...doc.data() });
+      });
+
+      const profiles = await Promise.all(
+        memberEntries.map(async (m: any) => {
+          try {
+            const profDoc = await db.collection("users").doc(m.userId).get();
+            const prof = profDoc.data() || {};
+            return {
+              userId: m.userId,
+              username: prof.username || "Unknown",
+              photoURL: prof.photoURL || "",
+              roles: m.roles || [],
+              joinedAt: m.joinedAt,
+            };
+          } catch {
+            return { userId: m.userId, username: "Unknown", photoURL: "", roles: [], joinedAt: null };
+          }
+        })
+      );
+
+      const rolesSnapshot = await db.collection("servers").doc(serverCode).collection("roles").get();
+      const allRoles = rolesSnapshot.docs.map((d: any) => d.data());
+
+      profiles.sort((a: any, b: any) => {
+        const aRole = allRoles.find((r: any) => a.roles.includes(r.name));
+        const bRole = allRoles.find((r: any) => b.roles.includes(r.name));
+        const aPrio = aRole ? aRole.priority || 0 : 0;
+        const bPrio = bRole ? bRole.priority || 0 : 0;
+        if (bPrio !== aPrio) return bPrio - aPrio;
+        return (a.username || "").localeCompare(b.username || "");
+      });
+
+      callback(profiles);
+    }, (error: any) => {
+      console.error("Members error:", error);
+      if (typeof Para !== "undefined") Para.capture(error, { type: "firestore", context: "loadServerMembers" });
+    });
 }
 
 async function getServer(code: string): Promise<any> {
@@ -504,6 +664,7 @@ let channelMessagesUnsub: (() => void) | null = null;
 let currentServerCode: string | null = null;
 let currentChannelId: string | null = null;
 let userServersCache: any[] = [];
+let memberListUnsub: (() => void) | null = null;
 
 function initDashboard(): void {
   const serverList = document.getElementById("server-list");
@@ -645,7 +806,14 @@ function initDashboard(): void {
   });
 
   // Create channel modal
-  document.getElementById("add-channel-btn")?.addEventListener("click", () => {
+  document.getElementById("add-channel-btn")?.addEventListener("click", async () => {
+    if (currentServerCode) {
+      const allowed = await userHasPermission(currentServerCode, "manage_channels");
+      if (!allowed) {
+        showAuthError("You don't have permission to create channels");
+        return;
+      }
+    }
     showModal("create-channel-modal");
     document.getElementById("channel-name-input")?.focus();
   });
@@ -693,8 +861,23 @@ function initDashboard(): void {
   // Send message
   const send = () => {
     const text = inputEl?.value.trim();
-    if (!text || !currentChannelId) return;
-    sendChannelMessage(currentChannelId, text).catch((err: any) => {
+    const cid = currentChannelId;
+    const sc = currentServerCode;
+    if (!text || !cid) return;
+    if (sc) {
+      userHasPermission(sc, "send_messages").then((allowed) => {
+        if (!allowed) {
+          showAuthError("You don't have permission to send messages");
+          return;
+        }
+        sendChannelMessage(cid, text).catch((err: any) => {
+          showAuthError("Failed to send: " + err.message);
+        });
+        if (inputEl) { inputEl.value = ""; inputEl.focus(); }
+      });
+      return;
+    }
+    sendChannelMessage(cid, text).catch((err: any) => {
       showAuthError("Failed to send: " + err.message);
     });
     if (inputEl) { inputEl.value = ""; inputEl.focus(); }
@@ -703,6 +886,81 @@ function initDashboard(): void {
   sendBtn?.addEventListener("click", send);
   inputEl?.addEventListener("keypress", (e) => {
     if (e.key === "Enter") send();
+  });
+
+  // Server header dropdown
+  const serverHeader = document.getElementById("channel-header");
+  const serverDropdown = document.getElementById("server-dropdown");
+
+  serverHeader?.addEventListener("click", (e) => {
+    e.stopPropagation();
+    serverDropdown?.classList.toggle("open");
+  });
+
+  document.addEventListener("click", () => {
+    serverDropdown?.classList.remove("open");
+  });
+
+  document.getElementById("server-roles-btn")?.addEventListener("click", () => {
+    serverDropdown?.classList.remove("open");
+    showModal("roles-modal");
+    renderRolesModal();
+  });
+
+  document.getElementById("server-members-btn")?.addEventListener("click", () => {
+    serverDropdown?.classList.remove("open");
+    const memberList = document.getElementById("member-list-sidebar");
+    if (memberList) {
+      memberList.classList.toggle("hidden");
+    }
+  });
+
+  // Roles modal
+  document.getElementById("roles-modal-close")?.addEventListener("click", () => {
+    hideModal("roles-modal");
+  });
+
+  // Create role modal
+  document.getElementById("create-role-btn")?.addEventListener("click", () => {
+    hideModal("roles-modal");
+    showModal("create-role-modal");
+    document.getElementById("role-name-input")?.focus();
+  });
+
+  document.getElementById("create-role-cancel")?.addEventListener("click", () => {
+    hideModal("create-role-modal");
+  });
+
+  document.getElementById("create-role-confirm")?.addEventListener("click", async () => {
+    const input = document.getElementById("role-name-input") as HTMLInputElement;
+    const name = input?.value.trim();
+    if (!name || !currentServerCode) return;
+    try {
+      const rolesRef = db.collection("servers").doc(currentServerCode).collection("roles");
+      await rolesRef.add({
+        name,
+        color: "#5865f2",
+        priority: 50,
+        permissions: {
+          administrator: false,
+          manage_roles: false,
+          manage_channels: false,
+          manage_server: false,
+          kick_members: false,
+          send_messages: true,
+          connect: true,
+          speak: true,
+        },
+        isDefault: false,
+        createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+      });
+      hideModal("create-role-modal");
+      input.value = "";
+      showModal("roles-modal");
+      renderRolesModal();
+    } catch (err: any) {
+      showAuthError("Failed to create role");
+    }
   });
 
   // Flash messages
@@ -767,6 +1025,12 @@ function selectServer(code: string | null): void {
     officialBtn.classList.toggle("active", code === PARAX_OFFICIAL_CODE);
   }
 
+  // Cleanup member list
+  if (memberListUnsub) { memberListUnsub(); memberListUnsub = null; }
+  document.getElementById("member-list")!.innerHTML = "";
+  const memberListSidebar = document.getElementById("member-list-sidebar");
+  if (memberListSidebar) memberListSidebar.classList.add("hidden");
+
   if (!code) {
     // Show home
     channelSidebar?.classList.add("hidden");
@@ -798,6 +1062,95 @@ function selectServer(code: string | null): void {
     if (channels.length > 0 && !currentChannelId) {
       selectChannel(channels[0].id, channels[0].name, code);
     }
+  });
+
+  // Load members
+  memberListUnsub = loadServerMembers(code, (members) => {
+    renderMemberList(members, code);
+  });
+}
+
+function renderMemberList(members: any[], serverCode: string): void {
+  if (serverCode !== currentServerCode) return;
+  const container = document.getElementById("member-list");
+  if (!container) return;
+  const memberListSidebar = document.getElementById("member-list-sidebar");
+  if (memberListSidebar) memberListSidebar.classList.remove("hidden");
+
+  const count = document.getElementById("member-count");
+  if (count) count.textContent = members.length + " member" + (members.length !== 1 ? "s" : "");
+
+  container.innerHTML = members.map((m) => {
+    const initial = (m.username || "U")[0].toUpperCase();
+    const avatarHtml = m.photoURL
+      ? `<img src="${escapeHtml(m.photoURL)}" alt="" class="member-avatar-img" />`
+      : `<span class="member-avatar-initials">${initial}</span>`;
+    return `
+      <div class="member-item" title="${escapeHtml(m.username)}">
+        <div class="member-avatar">${avatarHtml}</div>
+        <div class="member-info">
+          <span class="member-name">${escapeHtml(m.username)}</span>
+        </div>
+      </div>
+    `;
+  }).join("");
+}
+
+function renderRolesModal(): void {
+  if (!currentServerCode) return;
+  const container = document.getElementById("roles-list");
+  if (!container) return;
+
+  loadServerRoles(currentServerCode, (roles) => {
+    container.innerHTML = roles.map((r) => {
+      const perms = r.permissions || {};
+      return `
+        <div class="role-card" data-role-id="${r.id}">
+          <div class="role-card-header">
+            <span class="role-name" style="color:${r.color || "#949ba4"}">${escapeHtml(r.name)}</span>
+            <span class="role-badge" style="background:${r.color || "#949ba4"}"></span>
+          </div>
+          <div class="role-permissions">
+            ${Object.keys(perms).map((p) => `
+              <label class="role-perm-item">
+                <input type="checkbox" ${perms[p] ? "checked" : ""} data-perm="${p}" data-role-id="${r.id}" ${r.isDefault ? "disabled" : ""} />
+                <span>${escapeHtml(p.replace(/_/g, " "))}</span>
+              </label>
+            `).join("")}
+          </div>
+          ${!r.isDefault ? `<button class="btn btn-sm btn-secondary role-delete-btn" data-role-id="${r.id}">Delete</button>` : ""}
+        </div>
+      `;
+    }).join("");
+
+    container.querySelectorAll('input[type="checkbox"][data-role-id]').forEach((el) => {
+      el.addEventListener("change", async (e) => {
+        const cb = e.target as HTMLInputElement;
+        const roleId = cb.dataset.roleId;
+        const perm = cb.dataset.perm;
+        if (!roleId || !perm || !currentServerCode) return;
+        try {
+          const roleRef = db.collection("servers").doc(currentServerCode).collection("roles").doc(roleId);
+          await roleRef.update({ ["permissions." + perm]: cb.checked });
+        } catch (err: any) {
+          showAuthError("Failed to update permission");
+        }
+      });
+    });
+
+    container.querySelectorAll(".role-delete-btn").forEach((el) => {
+      el.addEventListener("click", async () => {
+        const roleId = (el as HTMLElement).dataset.roleId;
+        if (!roleId || !currentServerCode) return;
+        if (!confirm("Delete this role?")) return;
+        try {
+          await db.collection("servers").doc(currentServerCode).collection("roles").doc(roleId).delete();
+          renderRolesModal();
+        } catch (err: any) {
+          showAuthError("Failed to delete role");
+        }
+      });
+    });
   });
 }
 
@@ -977,6 +1330,7 @@ function cleanupSubs(): void {
   if (serverChannelsUnsub) { serverChannelsUnsub(); serverChannelsUnsub = null; }
   if (channelMessagesUnsub) { channelMessagesUnsub(); channelMessagesUnsub = null; }
   if (homeRoomsUnsub) { homeRoomsUnsub(); homeRoomsUnsub = null; }
+  if (memberListUnsub) { memberListUnsub(); memberListUnsub = null; }
 }
 
 function promptRoomPassword(code: string, correctPassword: string): void {}

@@ -1425,13 +1425,232 @@ html, body {
   cursor: pointer;
 }
 
+.channel-header {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
 .channel-header h3 {
   font-size: 1rem;
   font-weight: 700;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  flex: 1;
 }
+
+.channel-header-chevron {
+  width: 16px;
+  height: 16px;
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+
+/* ===== SERVER DROPDOWN ===== */
+
+.server-dropdown {
+  position: absolute;
+  top: 100%;
+  left: 8px;
+  right: 8px;
+  background: #111214;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 6px;
+  display: none;
+  z-index: 200;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+}
+
+.server-dropdown.open {
+  display: block;
+}
+
+.server-dropdown button {
+  display: block;
+  width: 100%;
+  padding: 8px 12px;
+  background: none;
+  border: none;
+  color: var(--text-primary);
+  font-size: 0.85rem;
+  text-align: left;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.server-dropdown button:hover {
+  background: var(--bg-hover);
+}
+
+/* ===== MEMBER LIST SIDEBAR ===== */
+
+.member-list-sidebar {
+  width: 240px;
+  background: var(--bg-secondary);
+  flex-shrink: 0;
+  border-left: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  animation: sidebarSlideIn 0.2s ease reverse;
+}
+
+.member-list-sidebar.hidden {
+  display: none;
+}
+
+.member-list-header {
+  padding: 16px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  letter-spacing: 0.04em;
+  border-bottom: 1px solid var(--border);
+}
+
+.member-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px;
+}
+
+.member-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  cursor: default;
+  transition: background 0.15s ease;
+}
+
+.member-item:hover {
+  background: var(--bg-hover);
+}
+
+.member-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: var(--bg-accent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  overflow: hidden;
+}
+
+.member-avatar-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.member-avatar-initials {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.member-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.member-name {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  display: block;
+}
+
+/* ===== ROLES MODAL ===== */
+
+.modal-card-wide {
+  max-width: 520px;
+}
+
+.roles-list {
+  max-height: 400px;
+  overflow-y: auto;
+  margin: 16px 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.role-card {
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px;
+}
+
+.role-card-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.role-name {
+  font-size: 0.95rem;
+  font-weight: 700;
+}
+
+.role-badge {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.role-permissions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.role-perm-item {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+  cursor: pointer;
+  padding: 4px 8px;
+  background: var(--bg-secondary);
+  border-radius: 4px;
+  transition: background 0.15s ease;
+}
+
+.role-perm-item:hover {
+  background: var(--bg-hover);
+}
+
+.role-perm-item input[type="checkbox"] {
+  accent-color: var(--brand);
+}
+
+.role-delete-btn {
+  margin-top: 10px;
+  font-size: 0.78rem;
+  color: var(--error);
+}
+
+/* ===== CHANNEL SIDEBAR (rest) ===== */
+
+.channel-section {
+  flex: 1;
+  overflow-y: auto;
+  padding: 12px 8px;
 
 .channel-section {
   flex: 1;

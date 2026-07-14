@@ -33,6 +33,15 @@ service cloud.firestore {
       allow read: if request.auth != null;
       allow create: if request.auth != null;
       allow delete: if request.auth != null && request.auth.uid == resource.data.userId;
+      allow update: if request.auth != null && resource.data.userId == request.auth.uid;
+    }
+
+    // Server roles
+    match /servers/{serverCode}/roles/{roleId} {
+      allow read: if request.auth != null;
+      allow create: if request.auth != null;
+      allow update: if request.auth != null;
+      allow delete: if request.auth != null;
     }
 
     // Messages: authenticated users can read, create their own messages
