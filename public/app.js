@@ -572,23 +572,18 @@ async function saveProfile(uid, data) {
     await db.collection("users").doc(uid).update(data);
 }
 async function uploadAvatar(uid, file) {
-    return new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = async () => {
-            const dataUrl = reader.result;
-            try {
-                await db.collection("users").doc(uid).update({ photoURL: dataUrl });
-                resolve(dataUrl);
-            }
-            catch (err) {
-                reject(err);
-            }
-        };
-        reader.onerror = () => reject(new Error("Failed to read file"));
-        reader.readAsDataURL(file);
-    });
+    const ref = firebase.storage().ref("profiles/" + uid + "/avatar.jpg");
+    const snapshot = await ref.put(file);
+    const downloadUrl = await snapshot.ref.getDownloadURL();
+    await db.collection("users").doc(uid).update({ photoURL: downloadUrl });
+    return downloadUrl;
 }
 async function removeAvatar(uid) {
+    try {
+        const ref = firebase.storage().ref("profiles/" + uid + "/avatar.jpg");
+        await ref.delete();
+    }
+    catch (_) { }
     await db.collection("users").doc(uid).update({ photoURL: "" });
 }
 /* ===== SETTINGS ===== */
