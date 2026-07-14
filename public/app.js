@@ -63,6 +63,14 @@ async function handleLogin(email, password) {
     await auth.signInWithEmailAndPassword(email, password);
 }
 async function handleGoogleAuth() {
+    const isElectron = !!window.electronAPI?.isElectron;
+    if (isElectron) {
+        const tokens = await window.electronAPI.signInWithGoogle();
+        const credential = firebase.auth.GoogleAuthProvider.credential(tokens.idToken);
+        const cred = await auth.signInWithCredential(credential);
+        await createUserDocIfNew(cred);
+        return;
+    }
     const provider = new firebase.auth.GoogleAuthProvider();
     provider.setCustomParameters({ prompt: "select_account" });
     const cred = await auth.signInWithPopup(provider);
