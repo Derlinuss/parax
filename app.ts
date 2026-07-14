@@ -37,6 +37,10 @@ document.addEventListener("DOMContentLoaded", () => {
     initDashboard();
   }
 
+  if (page === "chat.html") {
+    initChat();
+  }
+
   if (page === "settings.html") {
     initSettings();
   }
@@ -100,10 +104,10 @@ function handleAuthError(error: any): string {
 /* ===== ROOM FUNCTIONS ===== */
 
 function generateRoomCode(): string {
-  const arr = new Uint8Array(6);
-  crypto.getRandomValues(arr);
-  const num = arr.reduce((n, b) => n * 256 + b, 0);
-  return (10000000000 + (num % 90000000000)).toString();
+  const digits = new Uint8Array(11);
+  crypto.getRandomValues(digits);
+  return String.fromCharCode(49 + digits[0] % 9) +
+    Array.from(digits.slice(1), (b) => String.fromCharCode(48 + b % 10)).join("");
 }
 
 async function hashPassword(password: string): Promise<string> {
@@ -144,10 +148,10 @@ async function roomExists(code: string): Promise<boolean> {
 const PARAX_OFFICIAL_CODE = "00000000001";
 
 function generateServerCode(): string {
-  const arr = new Uint8Array(6);
-  crypto.getRandomValues(arr);
-  const num = arr.reduce((n, b) => n * 256 + b, 0);
-  return (10000000000 + (num % 90000000000)).toString();
+  const digits = new Uint8Array(11);
+  crypto.getRandomValues(digits);
+  return String.fromCharCode(49 + digits[0] % 9) +
+    Array.from(digits.slice(1), (b) => String.fromCharCode(48 + b % 10)).join("");
 }
 
 function memberDocId(uid: string, serverCode: string): string {
@@ -1430,11 +1434,10 @@ function renderHomeRooms(): void {
       container.innerHTML = '<p style="color: var(--text-muted); text-align: center;">You\'re not in any servers yet. Create one or join with a code!</p>';
     } else {
       container.innerHTML = rooms.map((r) => `
-        <div class="home-room-item">
+        <a href="/chat.html?code=${r.code}" class="home-room-item">
           <span class="home-room-code">${escapeHtml(r.code)}</span>
-          <span style="color:var(--text-muted);font-size:0.8rem">${r.createdAt?.toDate?.()?.toLocaleDateString() || ""}</span>
-          <span style="color:var(--text-muted);font-size:0.75rem;margin-left:auto">(legacy room)</span>
-        </div>
+          <span>${r.createdAt?.toDate?.()?.toLocaleDateString() || ""}</span>
+        </a>
       `).join("");
     }
   });
@@ -1464,10 +1467,102 @@ function cleanupSubs(): void {
 
 function promptRoomPassword(code: string, correctPassword: string): void {}
 
+/* ===== CHAT ===== */
+
+let chatUnsub: (() => void) | null = null;
+let currentRoomCode: string | null = null;
+
 function escapeHtml(text: string): string {
   const div = document.createElement("div");
   div.textContent = text;
   return div.innerHTML;
+}
+
+function initChat(): void {
+  const params = new URLSearchParams(window.location.search);
+  const roomCode = params.get("code");
+
+  if (!roomCode) {
+    window.location.href = "/dashboard.html";
+    return;
+  }
+
+  currentRoomCode = roomCode;
+  const headerEl = document.getElementById("room-code-display");
+  const messagesEl = document.getElementById("chat-messages");
+  const inputEl = document.getElementById("message-input") as HTMLInputElement | null;
+  const sendBtn = document.getElementById("send-btn");
+  const leaveBtn = document.getElementById("leave-room-btn");
+
+  if (headerEl) headerEl.textContent = roomCode;
+
+  getRoom(roomCode).then(async (room) => {
+    if (!room) {
+      if (messagesEl) messagesEl.innerHTML = '<div class="chat-error">Room not found. <a href="/dashboard.html">Go back</a></div>';
+      return;
+    }
+    if (room.passwordHash || room.password) {
+      const storedPass = sessionStorage.getItem("room_pass_" + roomCode);
+      if (!storedPass) {
+        sessionStorage.setItem("flash_error", "This room requires a password");
+        window.location.href = "/dashboard.html";
+        return;
+      }
+      if (room.passwordHash) {
+        const inputHash = await hashPassword(storedPass);
+        if (inputHash !== room.passwordHash) {
+          sessionStorage.setItem("flash_error", "Incorrect password");
+          window.location.href = "/dashboard.html";
+          return;
+        }
+      } else if (storedPass !== room.password) {
+        sessionStorage.setItem("flash_error", "Incorrect password");
+        window.location.href = "/dashboard.html";
+        return;
+      }
+    }
+
+    chatUnsub = loadMessages(roomCode, (messages) => {
+      if (!messagesEl) return;
+      const wasEmpty = messagesEl.querySelector(".chat-empty, .chat-loading") !== null;
+      if (messages.length === 0) {
+        messagesEl.innerHTML = '<div class="chat-empty">No messages yet. Say hello!</div>';
+      } else {
+        const isAtBottom = wasEmpty || messagesEl.scrollHeight - messagesEl.scrollTop - messagesEl.clientHeight < 100;
+        messagesEl.innerHTML = messages.map(m => {
+          const time = m.createdAt?.toDate?.()?.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) || "";
+          return `
+            <div class="message ${m.senderId === auth.currentUser?.uid ? "message-own" : ""}">
+              <div class="message-header">
+                <span class="message-sender">${escapeHtml(m.senderName)}</span>
+                <span class="message-time">${time}</span>
+              </div>
+              <div class="message-text">${escapeHtml(m.text)}</div>
+            </div>
+          `;
+        }).join("");
+        if (isAtBottom) messagesEl.scrollTop = messagesEl.scrollHeight;
+      }
+    });
+  });
+
+  const send = () => {
+    if (!inputEl?.value.trim()) return;
+    sendMessage(roomCode, inputEl.value).catch((err: any) => {
+      showAuthError("Failed to send: " + err.message);
+    });
+    inputEl.value = "";
+    inputEl.focus();
+  };
+
+  sendBtn?.addEventListener("click", send);
+  inputEl?.addEventListener("keypress", (e) => {
+    if (e.key === "Enter") send();
+  });
+
+  leaveBtn?.addEventListener("click", () => {
+    window.location.href = "/dashboard.html";
+  });
 }
 
 /* ===== AUTH STATE LISTENER ===== */
@@ -1475,7 +1570,7 @@ function escapeHtml(text: string): string {
 function initAuthStateListener(currentPage: string): void {
   auth.onAuthStateChanged((user: any) => {
     if (!user) {
-      if (currentPage === "dashboard.html") {
+      if (currentPage === "dashboard.html" || currentPage === "chat.html") {
         window.location.href = "/login.html";
         return;
       }
