@@ -1,7 +1,11 @@
 import express from "express";
 import cors from "cors";
 import path from "path";
+import dotenv from "dotenv";
 import authRoutes from "./routes/auth";
+import voiceRoutes from "./routes/voice";
+
+dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -11,6 +15,7 @@ app.use(express.json());
 app.use(express.static(path.join(__dirname, "../../")));
 
 app.use("/api/auth", authRoutes);
+app.use("/api/voice", voiceRoutes);
 
 app.get("/", (_req, res) => {
   res.sendFile(path.join(__dirname, "../../index.html"));

@@ -9,6 +9,8 @@
   <script src="https://www.gstatic.com/firebasejs/11.0.1/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/11.0.1/firebase-firestore-compat.js"></script>
   <script src="para.js"></script>
+  <script crossorigin src="https://unpkg.com/@daily-co/daily-js"></script>
+  <script src="para-voice.js"></script>
 </head>
 <body>
   <nav class="navbar">
@@ -63,6 +65,10 @@
       <div class="channel-section">
         <div class="channel-section-title">Text Channels</div>
         <div id="channel-list"></div>
+      </div>
+      <div class="channel-section">
+        <div class="channel-section-title">Voice Channels</div>
+        <div id="voice-channel-list"></div>
       </div>
       <div class="channel-sidebar-footer">
         <div class="user-profile-card" id="user-profile-card">
@@ -119,7 +125,7 @@
       <div id="chat-area" class="chat-area hidden">
         <div class="chat-header">
           <div class="chat-header-info">
-            <span class="channel-hash">#</span>
+            <span class="channel-hash" id="channel-hash">#</span>
             <span id="channel-name">channel</span>
           </div>
           <div class="chat-header-actions">
@@ -134,6 +140,7 @@
           <input type="text" id="server-message-input" placeholder="Message #channel" autocomplete="off" />
           <button id="server-send-btn" class="btn btn-primary">Send</button>
         </div>
+        <div id="voice-container" class="voice-container hidden"></div>
       </div>
     </div>
   </div>
@@ -173,16 +180,59 @@
   <!-- Create Channel Modal -->
   <div id="create-channel-modal" class="modal-overlay hidden">
     <div class="modal-card">
-      <h2>Create Text Channel</h2>
-      <p class="subtitle">Enter a name for the new text channel.</p>
+      <h2>Create Channel</h2>
+      <p class="subtitle">Enter a name and choose the type.</p>
       <div class="form-group">
         <label>Channel Name</label>
         <input type="text" id="channel-name-input" placeholder="general" maxlength="30" />
+      </div>
+      <div class="form-group">
+        <label>Type</label>
+        <div class="channel-type-options">
+          <label class="channel-type-option">
+            <input type="radio" name="channel-type" value="text" checked />
+            <span>Text</span>
+          </label>
+          <label class="channel-type-option">
+            <input type="radio" name="channel-type" value="voice" />
+            <span>Voice</span>
+          </label>
+        </div>
       </div>
       <div class="modal-actions">
         <button class="btn btn-secondary" id="create-channel-cancel">Cancel</button>
         <button class="btn btn-primary" id="create-channel-confirm">Create</button>
       </div>
+    </div>
+  </div>
+
+  <!-- Voice Container (inside chat area) -->
+  <div id="voice-container" class="voice-container hidden"></div>
+
+  <!-- Voice Status Bar -->
+  <div id="voice-bar" class="voice-bar hidden">
+    <div class="voice-bar-left">
+      <span class="voice-dot"></span>
+      <span class="voice-label">Connected — </span>
+      <span id="voice-channel-name" class="voice-channel-name">Channel</span>
+    </div>
+    <div class="voice-bar-center">
+      <button id="voice-mute-btn" class="voice-bar-btn" title="Toggle Mute">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/>
+          <path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"/>
+        </svg>
+      </button>
+    </div>
+    <div class="voice-bar-right">
+      <button id="voice-leave-btn" class="voice-bar-btn voice-leave-btn" title="Leave Voice">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M22 2L11 13"/>
+          <path d="M16 7l-4.5 4.5"/>
+          <path d="M9.5 9.5l-4.5 4.5"/>
+          <circle cx="12" cy="12" r="10"/>
+        </svg>
+      </button>
     </div>
   </div>
 

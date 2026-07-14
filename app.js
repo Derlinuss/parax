@@ -242,11 +242,14 @@ function loadUserServers(callback) {
     return () => membershipQuery();
 }
 /* ===== CHANNEL FUNCTIONS ===== */
-async function createChannel(serverCode, name) {
-    const ref = await db.collection("servers").doc(serverCode).collection("channels").add({
+async function createChannel(serverCode, name, type) {
+    const data = {
         name: name.toLowerCase().replace(/\s+/g, "-"),
         createdAt: firebase.firestore.FieldValue.serverTimestamp(),
-    });
+    };
+    if (type)
+        data.type = type;
+    const ref = await db.collection("servers").doc(serverCode).collection("channels").add(data);
     return ref.id;
 }
 function loadServerChannels(serverCode, callback) {
@@ -630,10 +633,12 @@ function initDashboard() {
         }
         if (!currentServerCode)
             return;
+        const typeEl = document.querySelector('input[name="channel-type"]:checked');
+        const type = typeEl?.value || "text";
         try {
             hideModal("create-channel-modal");
             input.value = "";
-            await createChannel(currentServerCode, name);
+            await createChannel(currentServerCode, name, type);
         }
         catch (err) {
             showAuthError("Failed to create channel: " + err.message);
@@ -773,26 +778,61 @@ function selectServer(code) {
 function renderChannelList(channels, serverCode) {
     if (serverCode !== currentServerCode)
         return;
-    const channelList = document.getElementById("channel-list");
-    if (!channelList)
-        return;
-    channelList.innerHTML = channels.map((ch) => {
-        const isActive = ch.id === currentChannelId;
-        return `
-      <div class="channel-item ${isActive ? "active" : ""}" data-channel-id="${ch.id}" data-channel-name="${escapeHtml(ch.name)}">
-        <span class="channel-hash">#</span>
-        <span class="channel-name">${escapeHtml(ch.name)}</span>
-      </div>
-    `;
-    }).join("");
-    channelList.querySelectorAll(".channel-item").forEach((el) => {
-        el.addEventListener("click", () => {
-            const id = el.dataset.channelId;
-            const name = el.dataset.channelName;
-            if (id && name)
-                selectChannel(id, name, serverCode);
-        });
-    });
+    const textChannels = channels.filter((ch) => ch.type !== "voice");
+    const voiceChannels = channels.filter((ch) => ch.type === "voice");
+    const textList = document.getElementById("channel-list");
+    const voiceList = document.getElementById("voice-channel-list");
+    if (textList) {
+        if (textChannels.length === 0) {
+            textList.innerHTML = '<div class="channel-empty">No channels yet</div>';
+        }
+        else {
+            textList.innerHTML = textChannels.map((ch) => {
+                const isActive = ch.id === currentChannelId;
+                return `
+          <div class="channel-item ${isActive ? "active" : ""}" data-channel-id="${ch.id}" data-channel-name="${escapeHtml(ch.name)}" data-channel-type="text">
+            <span class="channel-hash">#</span>
+            <span class="channel-name">${escapeHtml(ch.name)}</span>
+          </div>
+        `;
+            }).join("");
+            textList.querySelectorAll(".channel-item").forEach((el) => {
+                el.addEventListener("click", () => {
+                    const id = el.dataset.channelId;
+                    const name = el.dataset.channelName;
+                    if (id && name)
+                        selectChannel(id, name, serverCode);
+                });
+            });
+        }
+    }
+    if (voiceList) {
+        if (voiceChannels.length === 0) {
+            voiceList.innerHTML = '<div class="channel-empty">No voice channels yet</div>';
+        }
+        else {
+            voiceList.innerHTML = voiceChannels.map((ch) => {
+                const isVoiceActive = typeof ParaVoice !== "undefined" && ParaVoice.isActive() && ParaVoice.getActiveChannelId() === ch.id;
+                return `
+          <div class="channel-item channel-voice ${isVoiceActive ? "active" : ""}" data-channel-id="${ch.id}" data-channel-name="${escapeHtml(ch.name)}" data-channel-type="voice">
+            <span class="channel-hash">🔊</span>
+            <span class="channel-name">${escapeHtml(ch.name)}</span>
+          </div>
+        `;
+            }).join("");
+            voiceList.querySelectorAll(".channel-item").forEach((el) => {
+                el.addEventListener("click", () => {
+                    const id = el.dataset.channelId;
+                    const name = el.dataset.channelName;
+                    if (id && name) {
+                        if (typeof ParaVoice !== "undefined") {
+                            ParaVoice.join(id, name);
+                        }
+                    }
+                });
+            });
+        }
+    }
 }
 function selectChannel(channelId, channelName, serverCode) {
     if (serverCode !== currentServerCode)
@@ -802,6 +842,9 @@ function selectChannel(channelId, channelName, serverCode) {
         channelMessagesUnsub = null;
     }
     currentChannelId = channelId;
+    // Check if this is a voice channel
+    const chEl = document.querySelector(`.channel-item[data-channel-id="${channelId}"]`);
+    const isVoice = chEl?.getAttribute("data-channel-type") === "voice";
     // Update channel list active state
     document.querySelectorAll(".channel-item").forEach((el) => {
         el.classList.toggle("active", el.dataset.channelId === channelId);
@@ -809,42 +852,70 @@ function selectChannel(channelId, channelName, serverCode) {
     const chatArea = document.getElementById("chat-area");
     const welcomeState = document.getElementById("welcome-state");
     const channelNameEl = document.getElementById("channel-name");
+    const channelHash = document.getElementById("channel-hash");
     const messagesEl = document.getElementById("server-messages");
     const inputEl = document.getElementById("server-message-input");
+    const inputBar = document.querySelector(".chat-input-bar");
+    const voiceContainer = document.getElementById("voice-container");
     welcomeState?.classList.add("hidden");
     chatArea?.classList.remove("hidden");
-    if (channelNameEl)
-        channelNameEl.textContent = channelName;
-    if (inputEl)
-        inputEl.placeholder = "Message #" + channelName;
-    if (messagesEl)
-        messagesEl.innerHTML = '<div class="chat-loading">Loading messages...</div>';
-    channelMessagesUnsub = loadChannelMessages(channelId, (messages) => {
-        if (!messagesEl)
-            return;
-        if (messages.length === 0) {
-            messagesEl.innerHTML = '<div class="chat-empty">No messages yet. Start the conversation!</div>';
-        }
-        else {
-            const wasEmpty = messagesEl.querySelector(".chat-empty, .chat-loading") !== null;
-            const isAtBottom = wasEmpty || messagesEl.scrollHeight - messagesEl.scrollTop - messagesEl.clientHeight < 100;
-            messagesEl.innerHTML = messages.map((m) => {
-                const time = m.createdAt?.toDate?.()?.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) || "";
-                return `
-          <div class="message ${m.senderId === auth.currentUser?.uid ? "message-own" : ""}">
-            <div class="message-header">
-              <span class="message-sender">${escapeHtml(m.senderName)}</span>
-              <span class="message-time">${time}</span>
+    if (isVoice) {
+        // Voice channel: show voice container, hide messages + input
+        if (channelHash)
+            channelHash.textContent = "🔊";
+        if (channelNameEl)
+            channelNameEl.textContent = channelName;
+        if (inputBar)
+            inputBar.style.display = "none";
+        if (messagesEl)
+            messagesEl.style.display = "none";
+        if (voiceContainer)
+            voiceContainer.classList.remove("hidden");
+    }
+    else {
+        // Text channel: show messages + input, hide voice container
+        if (channelHash)
+            channelHash.textContent = "#";
+        if (inputBar)
+            inputBar.style.display = "";
+        if (messagesEl)
+            messagesEl.style.display = "";
+        if (voiceContainer)
+            voiceContainer.classList.add("hidden");
+        if (channelNameEl)
+            channelNameEl.textContent = channelName;
+        if (inputEl)
+            inputEl.placeholder = "Message #" + channelName;
+        if (messagesEl)
+            messagesEl.innerHTML = '<div class="chat-loading">Loading messages...</div>';
+        channelMessagesUnsub = loadChannelMessages(channelId, (messages) => {
+            if (!messagesEl)
+                return;
+            if (messages.length === 0) {
+                messagesEl.innerHTML = '<div class="chat-empty">No messages yet. Start the conversation!</div>';
+            }
+            else {
+                const wasEmpty = messagesEl.querySelector(".chat-empty, .chat-loading") !== null;
+                const isAtBottom = wasEmpty || messagesEl.scrollHeight - messagesEl.scrollTop - messagesEl.clientHeight < 100;
+                messagesEl.innerHTML = messages.map((m) => {
+                    const time = m.createdAt?.toDate?.()?.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) || "";
+                    return `
+            <div class="message ${m.senderId === auth.currentUser?.uid ? "message-own" : ""}">
+              <div class="message-header">
+                <span class="message-sender">${escapeHtml(m.senderName)}</span>
+                <span class="message-time">${time}</span>
+              </div>
+              <div class="message-text">${escapeHtml(m.text)}</div>
             </div>
-            <div class="message-text">${escapeHtml(m.text)}</div>
-          </div>
-        `;
-            }).join("");
-            if (isAtBottom)
-                messagesEl.scrollTop = messagesEl.scrollHeight;
-        }
-    });
+          `;
+                }).join("");
+                if (isAtBottom)
+                    messagesEl.scrollTop = messagesEl.scrollHeight;
+            }
+        });
+    }
 }
+const inputEl = document.getElementById("server-message-input");
 /* ===== HOME ROOMS (old room system) ===== */
 let homeRoomsUnsub = null;
 function renderHomeRooms() {
