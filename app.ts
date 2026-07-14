@@ -1176,6 +1176,9 @@ function selectServer(code: string | null): void {
     }
   });
 
+  // Show/hide add channel button based on permission
+  updateAddChannelButtonVisibility(code);
+
   // Load members
   memberListUnsub = loadServerMembers(code, (members) => {
     renderMemberList(members, code);
@@ -1210,6 +1213,13 @@ function renderMemberList(members: any[], serverCode: string): void {
       </div>
     `;
   }).join("");
+}
+
+async function updateAddChannelButtonVisibility(serverCode: string): Promise<void> {
+  const btn = document.getElementById("add-channel-btn");
+  if (!btn) return;
+  const allowed = await userHasPermission(serverCode, "manage_channels");
+  btn.style.display = allowed ? "" : "none";
 }
 
 function renderRolesModal(): void {

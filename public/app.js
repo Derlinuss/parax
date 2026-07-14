@@ -32,7 +32,6 @@ document.addEventListener("DOMContentLoaded", () => {
         initSettings();
     }
 });
-/* ===== FIREBASE AUTH ===== */
 function setPersistence(remember) {
     if (remember) {
         auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL);
@@ -82,7 +81,6 @@ function handleAuthError(error) {
     }
     return error.message || "Something went wrong.";
 }
-/* ===== ROOM FUNCTIONS ===== */
 function generateRoomCode() {
     return Math.floor(10000000000 + Math.random() * 90000000000).toString();
 }
@@ -115,7 +113,6 @@ async function roomExists(code) {
     const doc = await db.collection("rooms").doc(code).get();
     return doc.exists;
 }
-/* ===== SERVER FUNCTIONS ===== */
 const PARAX_OFFICIAL_CODE = "00000000001";
 function generateServerCode() {
     return Math.floor(10000000000 + Math.random() * 90000000000).toString();
@@ -176,7 +173,6 @@ async function createServer(name, joinType = "open") {
     await createDefaultRoles(code);
     return code;
 }
-/* ===== ROLE FUNCTIONS ===== */
 const DEFAULT_PERMISSIONS = {
     administrator: false,
     manage_roles: false,
@@ -454,7 +450,6 @@ function loadUserServers(callback) {
     });
     return () => membershipQuery();
 }
-/* ===== CHANNEL FUNCTIONS ===== */
 async function createChannel(serverCode, name, type) {
     const data = {
         name: name.toLowerCase().replace(/\s+/g, "-"),
@@ -480,7 +475,6 @@ function loadServerChannels(serverCode, callback) {
             Para.capture(error, { type: "firestore", context: "loadServerChannels" });
     });
 }
-/* ===== CHANNEL MESSAGE FUNCTIONS ===== */
 async function sendChannelMessage(channelId, text) {
     const user = auth.currentUser;
     if (!text.trim())
@@ -512,7 +506,6 @@ function loadChannelMessages(channelId, callback) {
             el.innerHTML = `<div class="chat-error">Failed to load messages.</div>`;
     });
 }
-/* ===== MESSAGE FUNCTIONS ===== */
 async function sendMessage(roomCode, text) {
     const user = auth.currentUser;
     if (!text.trim())
@@ -563,7 +556,6 @@ function loadUserRooms(callback) {
             Para.capture(error, { type: "firestore", context: "loadUserRooms" });
     });
 }
-/* ===== PROFILE FUNCTIONS ===== */
 async function loadProfile(uid) {
     const doc = await db.collection("users").doc(uid).get();
     return doc.data() || {};
@@ -586,7 +578,6 @@ async function removeAvatar(uid) {
     catch (_) { }
     await db.collection("users").doc(uid).update({ photoURL: "" });
 }
-/* ===== SETTINGS ===== */
 function initSettings() {
     const user = auth.currentUser;
     if (!user)
@@ -683,7 +674,6 @@ function initSettings() {
         saveBtn.disabled = false;
     });
 }
-/* ===== DASHBOARD (Discord-style) ===== */
 let dashboardUnsub = null;
 let serverChannelsUnsub = null;
 let channelMessagesUnsub = null;
@@ -703,7 +693,6 @@ function initDashboard() {
     const inputEl = document.getElementById("server-message-input");
     const sendBtn = document.getElementById("server-send-btn");
     const channelNameEl = document.getElementById("channel-name");
-    // User profile in channel sidebar
     const profileName = document.getElementById("profile-name");
     const profileAvatar = document.getElementById("profile-avatar");
     const logoutBtn = document.getElementById("profile-logout-btn");
@@ -720,7 +709,6 @@ function initDashboard() {
                 profileAvatar.innerHTML = `<img src="${p.photoURL}" alt="" />`;
             }
         });
-        // Claim Parax Official ownership if email matches
         if (user.email === "meric.yesiltas2014@gmail.com") {
             db.collection("servers").doc(PARAX_OFFICIAL_CODE).update({
                 ownerId: user.uid,
@@ -736,20 +724,16 @@ function initDashboard() {
     settingsBtn?.addEventListener("click", () => {
         window.location.href = "/settings.html";
     });
-    // Server list
     dashboardUnsub = loadUserServers((servers) => {
         userServersCache = servers;
         renderServerList(servers);
-        // If current server was removed, go back
         if (currentServerCode && !servers.find((s) => s.code === currentServerCode)) {
             selectServer(null);
         }
     });
-    // Home button
     document.getElementById("home-btn")?.addEventListener("click", () => {
         selectServer(null);
     });
-    // Official server button
     document.getElementById("official-server-btn")?.addEventListener("click", async () => {
         const code = PARAX_OFFICIAL_CODE;
         try {
@@ -765,12 +749,10 @@ function initDashboard() {
             showAuthError("Failed: " + err.message);
         }
     });
-    // Add server button
     document.getElementById("add-server-btn")?.addEventListener("click", () => {
         showModal("create-server-modal");
         document.getElementById("server-name-input")?.focus();
     });
-    // Create server modal
     document.getElementById("create-server-cancel")?.addEventListener("click", () => {
         hideModal("create-server-modal");
     });
@@ -795,7 +777,6 @@ function initDashboard() {
         if (e.key === "Enter")
             document.getElementById("create-server-confirm")?.click();
     });
-    // Join server modal
     document.getElementById("join-server-btn")?.addEventListener("click", () => {
         showModal("join-server-modal");
         document.getElementById("join-server-input")?.focus();
@@ -853,7 +834,6 @@ function initDashboard() {
             inviteGroup.style.display = "none";
         }
     });
-    // Create channel modal
     document.getElementById("add-channel-btn")?.addEventListener("click", async () => {
         if (currentServerCode) {
             const allowed = await userHasPermission(currentServerCode, "manage_channels");
@@ -892,7 +872,6 @@ function initDashboard() {
         if (e.key === "Enter")
             document.getElementById("create-channel-confirm")?.click();
     });
-    // Leave server
     document.getElementById("server-leave-btn")?.addEventListener("click", async () => {
         if (!currentServerCode || !user)
             return;
@@ -910,7 +889,6 @@ function initDashboard() {
             showAuthError("Failed to leave: " + err.message);
         }
     });
-    // Send message
     const send = () => {
         const text = inputEl?.value.trim();
         const cid = currentChannelId;
@@ -946,7 +924,6 @@ function initDashboard() {
         if (e.key === "Enter")
             send();
     });
-    // Server header dropdown
     const serverHeader = document.getElementById("channel-header");
     const serverDropdown = document.getElementById("server-dropdown");
     serverHeader?.addEventListener("click", (e) => {
@@ -973,11 +950,9 @@ function initDashboard() {
         showModal("invites-modal");
         renderInvitesList();
     });
-    // Roles modal
     document.getElementById("roles-modal-close")?.addEventListener("click", () => {
         hideModal("roles-modal");
     });
-    // Create role modal
     document.getElementById("create-role-btn")?.addEventListener("click", () => {
         hideModal("roles-modal");
         showModal("create-role-modal");
@@ -1019,7 +994,6 @@ function initDashboard() {
             showAuthError("Failed to create role");
         }
     });
-    // Invites modal
     document.getElementById("invites-modal-close")?.addEventListener("click", () => {
         hideModal("invites-modal");
     });
@@ -1035,14 +1009,12 @@ function initDashboard() {
             showAuthError("Failed to create invite");
         }
     });
-    // Flash messages
     const flash = sessionStorage.getItem("flash_error");
     if (flash) {
         sessionStorage.removeItem("flash_error");
         showAuthError(flash);
     }
 }
-/* ===== SERVER RENDERING ===== */
 function renderServerList(servers) {
     const serverList = document.getElementById("server-list");
     if (!serverList)
@@ -1064,9 +1036,7 @@ function renderServerList(servers) {
         });
     });
 }
-/* ===== SERVER / CHANNEL SELECTION ===== */
 function selectServer(code) {
-    // Cleanup previous channel subs
     if (channelMessagesUnsub) {
         channelMessagesUnsub();
         channelMessagesUnsub = null;
@@ -1082,20 +1052,16 @@ function selectServer(code) {
     const welcomeState = document.getElementById("welcome-state");
     const homeState = document.getElementById("home-state");
     const chatArea = document.getElementById("chat-area");
-    // Update home button active state
     const homeBtn = document.getElementById("home-btn");
     if (homeBtn)
         homeBtn.classList.toggle("active", !code);
-    // Update server list active state
     document.querySelectorAll(".server-item[data-code]").forEach((el) => {
         el.classList.toggle("active", el.dataset.code === code);
     });
-    // Update official server active state
     const officialBtn = document.getElementById("official-server-btn");
     if (officialBtn) {
         officialBtn.classList.toggle("active", code === PARAX_OFFICIAL_CODE);
     }
-    // Cleanup member list
     if (memberListUnsub) {
         memberListUnsub();
         memberListUnsub = null;
@@ -1105,7 +1071,6 @@ function selectServer(code) {
     if (memberListSidebar)
         memberListSidebar.classList.add("hidden");
     if (!code) {
-        // Show home
         channelSidebar?.classList.add("hidden");
         welcomeState?.classList.add("hidden");
         chatArea?.classList.add("hidden");
@@ -1127,14 +1092,13 @@ function selectServer(code) {
             });
         }
     }
-    // Load channels
     serverChannelsUnsub = loadServerChannels(code, (channels) => {
         renderChannelList(channels, code);
         if (channels.length > 0 && !currentChannelId) {
             selectChannel(channels[0].id, channels[0].name, code);
         }
     });
-    // Load members
+    updateAddChannelButtonVisibility(code);
     memberListUnsub = loadServerMembers(code, (members) => {
         renderMemberList(members, code);
     });
@@ -1169,6 +1133,13 @@ function renderMemberList(members, serverCode) {
       </div>
     `;
     }).join("");
+}
+async function updateAddChannelButtonVisibility(serverCode) {
+    const btn = document.getElementById("add-channel-btn");
+    if (!btn)
+        return;
+    const allowed = await userHasPermission(serverCode, "manage_channels");
+    btn.style.display = allowed ? "" : "none";
 }
 function renderRolesModal() {
     if (!currentServerCode)
@@ -1298,10 +1269,8 @@ function selectChannel(channelId, channelName, serverCode) {
         channelMessagesUnsub = null;
     }
     currentChannelId = channelId;
-    // Check if this is a voice channel
     const chEl = document.querySelector(`.channel-item[data-channel-id="${channelId}"]`);
     const isVoice = chEl?.getAttribute("data-channel-type") === "voice";
-    // Update channel list active state
     document.querySelectorAll(".channel-item").forEach((el) => {
         el.classList.toggle("active", el.dataset.channelId === channelId);
     });
@@ -1316,7 +1285,6 @@ function selectChannel(channelId, channelName, serverCode) {
     welcomeState?.classList.add("hidden");
     chatArea?.classList.remove("hidden");
     if (isVoice) {
-        // Voice channel: show voice container, hide messages + input
         if (channelHash)
             channelHash.textContent = "🔊";
         if (channelNameEl)
@@ -1329,7 +1297,6 @@ function selectChannel(channelId, channelName, serverCode) {
             voiceContainer.classList.remove("hidden");
     }
     else {
-        // Text channel: show messages + input, hide voice container
         if (channelHash)
             channelHash.textContent = "#";
         if (inputBar)
@@ -1372,7 +1339,6 @@ function selectChannel(channelId, channelName, serverCode) {
     }
 }
 const inputEl = document.getElementById("server-message-input");
-/* ===== HOME ROOMS (old room system) ===== */
 let homeRoomsUnsub = null;
 function renderHomeRooms() {
     const container = document.getElementById("home-rooms");
@@ -1396,7 +1362,6 @@ function renderHomeRooms() {
         }
     });
 }
-/* ===== MODAL HELPERS ===== */
 function showModal(id) {
     const el = document.getElementById(id);
     if (el)
@@ -1407,7 +1372,6 @@ function hideModal(id) {
     if (el)
         el.classList.add("hidden");
 }
-/* ===== CLEANUP ===== */
 function cleanupSubs() {
     if (dashboardUnsub) {
         dashboardUnsub();
@@ -1431,7 +1395,6 @@ function cleanupSubs() {
     }
 }
 function promptRoomPassword(code, correctPassword) { }
-/* ===== CHAT ===== */
 let chatUnsub = null;
 let currentRoomCode = null;
 function escapeHtml(text) {
@@ -1525,7 +1488,6 @@ function initChat() {
         window.location.href = "/dashboard.html";
     });
 }
-/* ===== AUTH STATE LISTENER ===== */
 function initAuthStateListener(currentPage) {
     auth.onAuthStateChanged((user) => {
         if (!user) {
@@ -1612,7 +1574,6 @@ function updateNavbar(user) {
         });
     }
 }
-/* ===== UI UTILITIES ===== */
 function showAuthError(message, type) {
     if (!message)
         return;
@@ -1624,7 +1585,6 @@ function showAuthError(message, type) {
     document.body.appendChild(errorEl);
     setTimeout(() => errorEl.remove(), 5000);
 }
-/* ===== PASSWORD VISIBILITY TOGGLE ===== */
 function initPasswordToggles() {
     const toggles = document.querySelectorAll(".password-toggle");
     toggles.forEach((toggle) => {
@@ -1646,7 +1606,6 @@ function initPasswordToggles() {
         });
     });
 }
-/* ===== FORM UTILITIES ===== */
 function setError(input, message) {
     input.classList.add("error");
     input.classList.remove("valid");
@@ -1683,7 +1642,6 @@ function validatePassword(password) {
 function passwordsMatch(a, b) {
     return a === b;
 }
-/* ===== SIGNUP ===== */
 function initSignupValidation() {
     const form = document.getElementById("signup-form");
     if (!form)
@@ -1826,7 +1784,6 @@ function initSignupValidation() {
         }
     });
 }
-/* ===== LOGIN ===== */
 function initLoginValidation() {
     const form = document.getElementById("login-form");
     if (!form)
