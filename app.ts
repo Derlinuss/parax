@@ -18,7 +18,18 @@ const auth = firebase.auth();
 const db = firebase.firestore();
 db.settings({ merge: true });
 
-document.addEventListener("DOMContentLoaded", () => {
+async function handleRedirectResult(): Promise<void> {
+  try {
+    const cred = await auth.getRedirectResult();
+    await createUserDocIfNew(cred);
+  } catch {
+    // Not a redirect result, ignore
+  }
+}
+
+document.addEventListener("DOMContentLoaded", async () => {
+  await handleRedirectResult();
+
   const page = window.location.pathname.split("/").pop() || "";
 
   initPasswordToggles();
@@ -73,8 +84,17 @@ async function handleLogin(email: string, password: string): Promise<void> {
 
 async function handleGoogleAuth(): Promise<void> {
   const provider = new firebase.auth.GoogleAuthProvider();
+  const isElectron = !!(window as any).electronAPI?.isElectron;
+  if (isElectron) {
+    await auth.signInWithRedirect(provider);
+    return;
+  }
   const cred = await auth.signInWithPopup(provider);
-  if (cred.additionalUserInfo?.isNewUser) {
+  await createUserDocIfNew(cred);
+}
+
+async function createUserDocIfNew(cred: any): Promise<void> {
+  if (cred?.additionalUserInfo?.isNewUser) {
     const user = cred.user;
     await db.collection("users").doc(user.uid).set({
       username: user.displayName || "User",
@@ -738,6 +758,8 @@ let userServersCache: any[] = [];
 let memberListUnsub: (() => void) | null = null;
 
 function initDashboard(): void {
+  handleRedirectResult().catch(() => {});
+
   const serverList = document.getElementById("server-list");
   const channelSidebar = document.getElementById("channel-sidebar");
   const serverNameEl = document.getElementById("server-name");

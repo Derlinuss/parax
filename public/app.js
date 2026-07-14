@@ -12,7 +12,16 @@ firebase.initializeApp(firebaseConfig);
 const auth = firebase.auth();
 const db = firebase.firestore();
 db.settings({ merge: true });
-document.addEventListener("DOMContentLoaded", () => {
+async function handleRedirectResult() {
+    try {
+        const cred = await auth.getRedirectResult();
+        await createUserDocIfNew(cred);
+    }
+    catch {
+    }
+}
+document.addEventListener("DOMContentLoaded", async () => {
+    await handleRedirectResult();
     const page = window.location.pathname.split("/").pop() || "";
     initPasswordToggles();
     if (page === "signup.html" || page.startsWith("signup")) {
@@ -55,8 +64,16 @@ async function handleLogin(email, password) {
 }
 async function handleGoogleAuth() {
     const provider = new firebase.auth.GoogleAuthProvider();
+    const isElectron = !!window.electronAPI?.isElectron;
+    if (isElectron) {
+        await auth.signInWithRedirect(provider);
+        return;
+    }
     const cred = await auth.signInWithPopup(provider);
-    if (cred.additionalUserInfo?.isNewUser) {
+    await createUserDocIfNew(cred);
+}
+async function createUserDocIfNew(cred) {
+    if (cred?.additionalUserInfo?.isNewUser) {
         const user = cred.user;
         await db.collection("users").doc(user.uid).set({
             username: user.displayName || "User",
@@ -688,6 +705,7 @@ let currentChannelId = null;
 let userServersCache = [];
 let memberListUnsub = null;
 function initDashboard() {
+    handleRedirectResult().catch(() => { });
     const serverList = document.getElementById("server-list");
     const channelSidebar = document.getElementById("channel-sidebar");
     const serverNameEl = document.getElementById("server-name");

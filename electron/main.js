@@ -13,10 +13,12 @@ function createWindow() {
       preload: path.join(__dirname, "preload.js"),
       contextIsolation: true,
       nodeIntegration: false,
+      nativeWindowOpen: true,
     },
   });
 
   win.loadURL("https://parax-vqqb.onrender.com");
+  win.webContents.setWindowOpenHandler(() => ({ action: "allow" }));
 
   win.on("page-title-updated", (e) => e.preventDefault());
 }
