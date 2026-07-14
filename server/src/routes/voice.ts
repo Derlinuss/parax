@@ -1,10 +1,19 @@
 import { Router, Response } from "express";
+import rateLimit from "express-rate-limit";
 import { verifyToken, AuthenticatedRequest } from "../middleware/auth";
 import "../config/firebase";
 
 const router = Router();
 
-router.post("/create-room", verifyToken, async (req: AuthenticatedRequest, res: Response) => {
+const voiceLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 5,
+  message: { error: "Too many voice room requests. Try again later." },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+router.post("/create-room", voiceLimiter, verifyToken, async (req: AuthenticatedRequest, res: Response) => {
   if (!req.user) {
     res.status(401).json({ error: "Unauthorized" });
     return;

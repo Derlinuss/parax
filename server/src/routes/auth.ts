@@ -1,8 +1,17 @@
 import { Router, Request, Response } from "express";
+import rateLimit from "express-rate-limit";
 import { verifyToken, AuthenticatedRequest } from "../middleware/auth";
 import { auth } from "../config/firebase";
 
 const router = Router();
+
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 20,
+  message: { error: "Too many requests. Try again later." },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
 
 router.post("/verify-token", verifyToken, (req: AuthenticatedRequest, res: Response) => {
   if (!req.user) {

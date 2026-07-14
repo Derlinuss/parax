@@ -1,8 +1,17 @@
 import { Router, Request, Response } from "express";
+import rateLimit from "express-rate-limit";
 
 const router = Router();
 
-router.post("/", (req: Request, res: Response) => {
+const logLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 30,
+  message: { error: "Too many log requests. Try again later." },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+router.post("/", logLimiter, (req: Request, res: Response) => {
   const data = req.body;
   const ts = new Date().toISOString();
 

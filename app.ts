@@ -1725,7 +1725,11 @@ function validateUsername(username: string): boolean {
 }
 
 function validatePassword(password: string): boolean {
-  return password.length >= 6;
+  return password.length >= 8
+    && /[A-Z]/.test(password)
+    && /[a-z]/.test(password)
+    && /[0-9]/.test(password)
+    && /[^A-Za-z0-9]/.test(password);
 }
 
 function passwordsMatch(a: string, b: string): boolean {
@@ -1790,7 +1794,7 @@ function initSignupValidation(): void {
       if (!val) {
         setError(passwordInput, "Password is required.");
       } else if (!validatePassword(val)) {
-        setError(passwordInput, "Must be at least 6 characters.");
+        setError(passwordInput, "Must be at least 8 characters with uppercase, lowercase, number, and special character.");
       } else {
         setValid(passwordInput);
       }
@@ -1841,7 +1845,7 @@ function initSignupValidation(): void {
     if (passwordInput) {
       const val = passwordInput.value;
       if (!val || !validatePassword(val)) {
-        setError(passwordInput, !val ? "Password is required." : "Must be at least 6 characters.");
+        setError(passwordInput, !val ? "Password is required." : "Must be at least 8 characters with uppercase, lowercase, number, and special character.");
         valid = false;
       } else {
         setValid(passwordInput);
