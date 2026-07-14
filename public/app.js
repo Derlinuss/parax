@@ -86,6 +86,13 @@ function handleAuthError(error) {
 function generateRoomCode() {
     return Math.floor(10000000000 + Math.random() * 90000000000).toString();
 }
+async function hashPassword(password) {
+    const encoder = new TextEncoder();
+    const data = encoder.encode(password);
+    const hashBuffer = await crypto.subtle.digest("SHA-256", data);
+    const hashArray = Array.from(new Uint8Array(hashBuffer));
+    return hashArray.map((b) => b.toString(16).padStart(2, "0")).join("");
+}
 async function createRoom(password) {
     const code = generateRoomCode();
     const user = auth.currentUser;
@@ -95,7 +102,7 @@ async function createRoom(password) {
         createdAt: firebase.firestore.FieldValue.serverTimestamp(),
     };
     if (password) {
-        data.password = password;
+        data.passwordHash = await hashPassword(password);
     }
     await db.collection("rooms").doc(code).set(data);
     return code;
@@ -146,7 +153,7 @@ async function ensureParaxOfficial() {
         return false;
     }
 }
-async function createServer(name) {
+async function createServer(name, joinType = "open") {
     const code = generateServerCode();
     const user = auth.currentUser;
     await db.collection("servers").doc(code).set({
@@ -154,6 +161,7 @@ async function createServer(name) {
         ownerId: user.uid,
         ownerName: user.displayName || "Unknown",
         createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+        joinType,
     });
     await db.collection("servers").doc(code).collection("channels").add({
         name: "general",
@@ -298,7 +306,7 @@ function loadServerMembers(serverCode, callback) {
             }
         }));
         const rolesSnapshot = await db.collection("servers").doc(serverCode).collection("roles").get();
-        const allRoles = rolesSnapshot.docs.map((d) => d.data());
+        const allRoles = rolesSnapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
         profiles.sort((a, b) => {
             const aRole = allRoles.find((r) => a.roles.includes(r.name));
             const bRole = allRoles.find((r) => b.roles.includes(r.name));
@@ -308,7 +316,11 @@ function loadServerMembers(serverCode, callback) {
                 return bPrio - aPrio;
             return (a.username || "").localeCompare(b.username || "");
         });
-        callback(profiles);
+        const enriched = profiles.map((p) => {
+            const role = allRoles.find((r) => p.roles.includes(r.name));
+            return { ...p, roleColor: role?.color || "", roleName: role?.name || "" };
+        });
+        callback(enriched);
     }, (error) => {
         console.error("Members error:", error);
         if (typeof Para !== "undefined")
@@ -323,7 +335,7 @@ async function serverExists(code) {
     const doc = await db.collection("servers").doc(code).get();
     return doc.exists;
 }
-async function joinServer(code) {
+async function joinServer(code, inviteCode) {
     const user = auth.currentUser;
     let exists = await serverExists(code);
     if (!exists) {
@@ -340,12 +352,64 @@ async function joinServer(code) {
     const existing = await db.collection("serverMembers").doc(docId).get();
     if (existing.exists)
         return true;
+    const serverDoc = await db.collection("servers").doc(code).get();
+    const serverData = serverDoc.data();
+    const joinType = serverData?.joinType || "open";
+    if (joinType === "invite") {
+        if (!inviteCode)
+            return false;
+        const inviteDoc = await db.collection("servers").doc(code).collection("serverInvites").doc(inviteCode).get();
+        if (!inviteDoc.exists)
+            return false;
+    }
     await db.collection("serverMembers").doc(docId).set({
         userId: user.uid,
         serverCode: code,
         joinedAt: firebase.firestore.FieldValue.serverTimestamp(),
+        ...(inviteCode ? { inviteCode } : {}),
     });
     return true;
+}
+async function generateInviteCode(serverCode) {
+    const arr = new Uint8Array(6);
+    crypto.getRandomValues(arr);
+    const inviteCode = Array.from(arr).map((b) => b.toString(36).padStart(2, "0")).join("").slice(0, 10);
+    await db.collection("servers").doc(serverCode).collection("serverInvites").doc(inviteCode).set({
+        createdBy: auth.currentUser?.uid || "unknown",
+        createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+    });
+    return inviteCode;
+}
+function loadServerInvites(serverCode, callback) {
+    return db.collection("servers").doc(serverCode).collection("serverInvites")
+        .orderBy("createdAt", "desc")
+        .onSnapshot((snapshot) => {
+        const invites = [];
+        snapshot.forEach((doc) => {
+            invites.push({ code: doc.id, ...doc.data() });
+        });
+        callback(invites);
+    }, () => {
+        callback([]);
+    });
+}
+function renderInvitesList() {
+    if (!currentServerCode)
+        return;
+    const container = document.getElementById("invites-list");
+    if (!container)
+        return;
+    container.innerHTML = '<div style="color:var(--text-muted);font-size:0.85rem;padding:8px;">Loading invites...</div>';
+    loadServerInvites(currentServerCode, (invites) => {
+        if (invites.length === 0) {
+            container.innerHTML = '<div style="color:var(--text-muted);font-size:0.85rem;padding:8px;">No invites yet. Generate one above.</div>';
+            return;
+        }
+        container.innerHTML = invites.map((inv) => `<div style="display:flex;align-items:center;justify-content:space-between;background:var(--bg-tertiary);padding:8px 12px;border-radius:var(--radius);">
+        <code style="font-size:0.9rem;color:var(--brand);font-weight:600;">${escapeHtml(inv.code)}</code>
+        <button class="btn btn-sm btn-secondary" onclick="navigator.clipboard.writeText('${escapeHtml(inv.code)}');showAuthError('Copied!','success')">Copy</button>
+      </div>`).join("");
+    });
 }
 async function isServerMember(code) {
     const user = auth.currentUser;
@@ -743,6 +807,7 @@ function initDashboard() {
     });
     document.getElementById("join-server-cancel")?.addEventListener("click", () => {
         hideModal("join-server-modal");
+        document.getElementById("join-invite-group").style.display = "none";
     });
     document.getElementById("join-server-confirm")?.addEventListener("click", async () => {
         const input = document.getElementById("join-server-input");
@@ -751,14 +816,19 @@ function initDashboard() {
             showAuthError("Enter a valid 11-digit server code");
             return;
         }
+        const inviteInput = document.getElementById("join-invite-input");
+        const inviteCode = inviteInput?.value.trim() || undefined;
         try {
-            const joined = await joinServer(code);
+            const joined = await joinServer(code, inviteCode);
             if (!joined) {
-                showAuthError("Server not found");
+                showAuthError("Server not found or invalid invite code");
                 return;
             }
             hideModal("join-server-modal");
+            document.getElementById("join-invite-group").style.display = "none";
             input.value = "";
+            if (inviteInput)
+                inviteInput.value = "";
             selectServer(code);
         }
         catch (err) {
@@ -769,9 +839,24 @@ function initDashboard() {
         if (e.key === "Enter")
             document.getElementById("join-server-confirm")?.click();
     });
-    document.getElementById("join-server-input")?.addEventListener("input", (e) => {
+    document.getElementById("join-server-input")?.addEventListener("input", async (e) => {
         const el = e.target;
         el.value = el.value.replace(/\D/g, "").slice(0, 11);
+        const code = el.value.trim();
+        const inviteGroup = document.getElementById("join-invite-group");
+        if (code.length === 11) {
+            try {
+                const serverDoc = await db.collection("servers").doc(code).get();
+                const joinType = serverDoc.data()?.joinType || "open";
+                inviteGroup.style.display = joinType === "invite" ? "block" : "none";
+            }
+            catch {
+                inviteGroup.style.display = "none";
+            }
+        }
+        else {
+            inviteGroup.style.display = "none";
+        }
     });
     // Create channel modal
     document.getElementById("add-channel-btn")?.addEventListener("click", async () => {
@@ -888,6 +973,11 @@ function initDashboard() {
             memberList.classList.toggle("hidden");
         }
     });
+    document.getElementById("server-invites-btn")?.addEventListener("click", () => {
+        serverDropdown?.classList.remove("open");
+        showModal("invites-modal");
+        renderInvitesList();
+    });
     // Roles modal
     document.getElementById("roles-modal-close")?.addEventListener("click", () => {
         hideModal("roles-modal");
@@ -932,6 +1022,22 @@ function initDashboard() {
         }
         catch (err) {
             showAuthError("Failed to create role");
+        }
+    });
+    // Invites modal
+    document.getElementById("invites-modal-close")?.addEventListener("click", () => {
+        hideModal("invites-modal");
+    });
+    document.getElementById("generate-invite-btn")?.addEventListener("click", async () => {
+        if (!currentServerCode)
+            return;
+        try {
+            const inviteCode = await generateInviteCode(currentServerCode);
+            renderInvitesList();
+            showAuthError("Invite created: " + inviteCode, "success");
+        }
+        catch (err) {
+            showAuthError("Failed to create invite");
         }
     });
     // Flash messages
@@ -1055,11 +1161,15 @@ function renderMemberList(members, serverCode) {
         const avatarHtml = m.photoURL
             ? `<img src="${escapeHtml(m.photoURL)}" alt="" class="member-avatar-img" />`
             : `<span class="member-avatar-initials">${initial}</span>`;
+        const roleDot = m.roleColor
+            ? `<span class="member-role-dot" style="background:${m.roleColor}"></span>`
+            : "";
         return `
       <div class="member-item" title="${escapeHtml(m.username)}">
         <div class="member-avatar">${avatarHtml}</div>
         <div class="member-info">
           <span class="member-name">${escapeHtml(m.username)}</span>
+          <div class="member-role-row">${roleDot}${m.roleName ? `<span class="member-role-label">${escapeHtml(m.roleName)}</span>` : ""}</div>
         </div>
       </div>
     `;
@@ -1349,16 +1459,32 @@ function initChat() {
     const leaveBtn = document.getElementById("leave-room-btn");
     if (headerEl)
         headerEl.textContent = roomCode;
-    getRoom(roomCode).then((room) => {
+    getRoom(roomCode).then(async (room) => {
         if (!room) {
             if (messagesEl)
                 messagesEl.innerHTML = '<div class="chat-error">Room not found. <a href="/dashboard.html">Go back</a></div>';
             return;
         }
-        if (room.password && sessionStorage.getItem("room_pass_" + roomCode) !== room.password) {
-            sessionStorage.setItem("flash_error", "This room requires a password");
-            window.location.href = "/dashboard.html";
-            return;
+        if (room.passwordHash || room.password) {
+            const storedPass = sessionStorage.getItem("room_pass_" + roomCode);
+            if (!storedPass) {
+                sessionStorage.setItem("flash_error", "This room requires a password");
+                window.location.href = "/dashboard.html";
+                return;
+            }
+            if (room.passwordHash) {
+                const inputHash = await hashPassword(storedPass);
+                if (inputHash !== room.passwordHash) {
+                    sessionStorage.setItem("flash_error", "Incorrect password");
+                    window.location.href = "/dashboard.html";
+                    return;
+                }
+            }
+            else if (storedPass !== room.password) {
+                sessionStorage.setItem("flash_error", "Incorrect password");
+                window.location.href = "/dashboard.html";
+                return;
+            }
         }
         chatUnsub = loadMessages(roomCode, (messages) => {
             if (!messagesEl)
@@ -1492,13 +1618,13 @@ function updateNavbar(user) {
     }
 }
 /* ===== UI UTILITIES ===== */
-function showAuthError(message) {
+function showAuthError(message, type) {
     if (!message)
         return;
     if (typeof Para !== "undefined")
         Para.capture(message, { type: "ui", context: "showAuthError" });
     const errorEl = document.createElement("div");
-    errorEl.className = "auth-error";
+    errorEl.className = "auth-error" + (type === "success" ? " auth-success" : "");
     errorEl.textContent = message;
     document.body.appendChild(errorEl);
     setTimeout(() => errorEl.remove(), 5000);

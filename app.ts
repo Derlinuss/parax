@@ -107,6 +107,14 @@ function generateRoomCode(): string {
   return Math.floor(10000000000 + Math.random() * 90000000000).toString();
 }
 
+async function hashPassword(password: string): Promise<string> {
+  const encoder = new TextEncoder();
+  const data = encoder.encode(password);
+  const hashBuffer = await crypto.subtle.digest("SHA-256", data);
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  return hashArray.map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
 async function createRoom(password?: string): Promise<string> {
   const code = generateRoomCode();
   const user = auth.currentUser;
@@ -116,7 +124,7 @@ async function createRoom(password?: string): Promise<string> {
     createdAt: firebase.firestore.FieldValue.serverTimestamp(),
   };
   if (password) {
-    data.password = password;
+    data.passwordHash = await hashPassword(password);
   }
   await db.collection("rooms").doc(code).set(data);
   return code;
@@ -1477,15 +1485,30 @@ function initChat(): void {
 
   if (headerEl) headerEl.textContent = roomCode;
 
-  getRoom(roomCode).then((room) => {
+  getRoom(roomCode).then(async (room) => {
     if (!room) {
       if (messagesEl) messagesEl.innerHTML = '<div class="chat-error">Room not found. <a href="/dashboard.html">Go back</a></div>';
       return;
     }
-    if (room.password && sessionStorage.getItem("room_pass_" + roomCode) !== room.password) {
-      sessionStorage.setItem("flash_error", "This room requires a password");
-      window.location.href = "/dashboard.html";
-      return;
+    if (room.passwordHash || room.password) {
+      const storedPass = sessionStorage.getItem("room_pass_" + roomCode);
+      if (!storedPass) {
+        sessionStorage.setItem("flash_error", "This room requires a password");
+        window.location.href = "/dashboard.html";
+        return;
+      }
+      if (room.passwordHash) {
+        const inputHash = await hashPassword(storedPass);
+        if (inputHash !== room.passwordHash) {
+          sessionStorage.setItem("flash_error", "Incorrect password");
+          window.location.href = "/dashboard.html";
+          return;
+        }
+      } else if (storedPass !== room.password) {
+        sessionStorage.setItem("flash_error", "Incorrect password");
+        window.location.href = "/dashboard.html";
+        return;
+      }
     }
 
     chatUnsub = loadMessages(roomCode, (messages) => {
