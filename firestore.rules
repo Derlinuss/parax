@@ -24,7 +24,8 @@ service cloud.firestore {
       // Channels within servers
       match /channels/{channelId} {
         allow read: if request.auth != null;
-        allow create: if request.auth != null;
+        allow create: if request.auth != null
+          && exists(/databases/$(database)/documents/serverMembers/$(request.auth.uid + "|" + serverCode));
       }
     }
 
@@ -48,12 +49,11 @@ service cloud.firestore {
       allow delete: if request.auth != null;
     }
 
-    // Server roles
+    // Server roles: only the owner can create/update/delete
     match /servers/{serverCode}/roles/{roleId} {
       allow read: if request.auth != null;
-      allow create: if request.auth != null;
-      allow update: if request.auth != null;
-      allow delete: if request.auth != null;
+      allow create, update, delete: if request.auth != null
+        && get(/databases/$(database)/documents/servers/$(serverCode)).data.ownerId == request.auth.uid;
     }
 
     // Messages: authenticated users can read, create their own messages
@@ -64,9 +64,9 @@ service cloud.firestore {
       allow update, delete: if false;
     }
 
-    // Errors (Para): authenticated users can read, create
+    // Errors (Para): users can only read their own errors
     match /errors/{errorId} {
-      allow read: if request.auth != null;
+      allow read: if request.auth != null && resource.data.userId == request.auth.uid;
       allow create: if request.auth != null;
       allow update, delete: if false;
     }
