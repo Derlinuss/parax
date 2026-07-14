@@ -4,3 +4,5 @@ node_modules/
 dist/
 functions/lib/
 server/dist/
+.env
+server/.env

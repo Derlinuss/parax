@@ -152,7 +152,7 @@ async function ensureParaxOfficial(): Promise<boolean> {
     if (!admin) return false;
     await db.collection("servers").doc(PARAX_OFFICIAL_CODE).set({
       name: "Parax Official",
-      ownerId: admin.uid,
+      ownerId: "",
       ownerName: "Parax",
       createdAt: firebase.firestore.FieldValue.serverTimestamp(),
     });
@@ -696,6 +696,14 @@ function initDashboard(): void {
         profileAvatar.innerHTML = `<img src="${p.photoURL}" alt="" />`;
       }
     });
+
+    // Claim Parax Official ownership if email matches
+    if (user.email === "meric.yesiltas2014@gmail.com") {
+      db.collection("servers").doc(PARAX_OFFICIAL_CODE).update({
+        ownerId: user.uid,
+        ownerName: user.displayName || "meric.yesiltas2014",
+      }).catch(() => {});
+    }
   }
 
   logoutBtn?.addEventListener("click", async () => {
