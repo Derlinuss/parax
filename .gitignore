@@ -11,3 +11,6 @@ plan_voice.md
 Güvenlik açığı sonucu – Telegraph.html
 Güvenlik açığı sonucu – Telegraph_files/
 Logo*.html
+Ekran görüntüsü *.png
+electron/node_modules/
+electron/dist/

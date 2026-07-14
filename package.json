@@ -1,6 +1,8 @@
 {
   "scripts": {
-    "start": "cd server && npx tsx src/server.ts"
+    "start": "cd server && npx tsx src/server.ts",
+    "electron": "cd electron && npm start",
+    "electron:build": "cd electron && npm run build"
   },
   "devDependencies": {
     "typescript": "^7.0.2"

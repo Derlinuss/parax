@@ -1,0 +1,30 @@
+{
+  "name": "parax-desktop",
+  "version": "1.0.0",
+  "description": "Parax desktop app (Electron wrapper)",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "build": "electron-builder --win"
+  },
+  "devDependencies": {
+    "electron": "^33.0.0",
+    "electron-builder": "^25.0.0"
+  },
+  "build": {
+    "appId": "com.parax.desktop",
+    "productName": "Parax",
+    "directories": {
+      "output": "dist"
+    },
+    "win": {
+      "target": ["nsis"],
+      "icon": "Parax.png"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true
+    },
+    "files": ["main.js", "preload.js", "Parax.png"]
+  }
+}
