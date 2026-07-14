@@ -124,6 +124,14 @@
       } catch (e) {
         console.warn("[Para] Failed to store error:", e);
       }
+      try {
+        var payload = { message: data.message, stack: data.stack, type: data.type, url: data.url };
+        fetch("/api/log", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        }).catch(function () {});
+      } catch (_) {}
     },
 
     _flushQueue: function () {
