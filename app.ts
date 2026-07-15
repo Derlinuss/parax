@@ -1436,7 +1436,28 @@ function kanalListesiGoster(channels: any[], serverCode: string): void {
           if (id && name) {
             if (typeof ParaVoice !== "undefined") {
               ParaVoice.join(id, name);
-            }
+}
+
+// ----- arkadaşlık sistemi (backend integration) -----
+
+async function arkadasIstegiGonder(hedefUserId: string) {
+    const user = auth.currentUser;
+    if (!user) return;
+    await db.collection("friends").add({
+        uid1: user.uid < hedefUserId ? user.uid : hedefUserId,
+        uid2: user.uid < hedefUserId ? hedefUserId : user.uid,
+        status: "pending",
+        senderId: user.uid,
+        createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+    });
+}
+
+async function arkadasIstegiKabulEt(requestId: string) {
+    await db.collection("friends").doc(requestId).update({
+        status: "accepted",
+        acceptedAt: firebase.firestore.FieldValue.serverTimestamp(),
+    });
+}
           }
         });
       });
