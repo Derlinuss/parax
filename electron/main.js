@@ -125,6 +125,21 @@ function createWindow() {
 
   win.loadURL("https://parax-vqqb.onrender.com");
   win.on("page-title-updated", (e) => e.preventDefault());
+
+  // D?? link'leri sistem taray?c?s?nda a?
+  win.webContents.setWindowOpenHandler(({ url }) => {
+    shell.openExternal(url);
+    return { action: "deny" };
+  });
+
+  win.webContents.on("will-navigate", (e, url) => {
+    const allowed = ["parax-vqqb.onrender.com", "127.0.0.1", "localhost"];
+    const host = new URL(url).hostname;
+    if (!allowed.some((a) => host === a || host.endsWith("." + a))) {
+      e.preventDefault();
+      shell.openExternal(url);
+    }
+  });
 }
 
 app.whenReady().then(createWindow);
