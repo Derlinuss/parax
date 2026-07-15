@@ -933,13 +933,30 @@ input {
   cursor: pointer;
 }
 
-@media (max-width: 768px) {
-  .dashboard-card {
-    padding: 32px 24px;
+@media (max-width: 600px) {
+  /* Increase touch targets */
+  .btn, .server-item, .chat-input-bar input, .channel-item {
+    min-height: 44px;
+    padding: 12px;
   }
-
+  
+  /* Ensure chat area is prominent */
+  .chat-messages {
+    padding: 12px;
+  }
+  
   .message {
-    max-width: 85%;
+    font-size: 0.95rem;
+    padding: 10px 14px;
+  }
+  
+  /* Adjust sidebar widths on mobile */
+  .server-sidebar {
+    width: 60px;
+  }
+  
+  .channel-sidebar {
+    width: 180px;
   }
 }
 
