@@ -2005,35 +2005,34 @@ function girisKontrol(): void {
   }
 
   if (anonymousBtn) {
+    const modal = document.getElementById("username-modal");
+    const confirmBtn = document.getElementById("username-confirm");
+    const input = document.getElementById("username-input") as HTMLInputElement | null;
+
+    confirmBtn?.addEventListener("click", async () => {
+      const username = input?.value.trim();
+      if (!username) return alert("Please enter a username");
+      
+      try {
+        await auth.signInAnonymously();
+        const user = auth.currentUser;
+        if (user) {
+          await user.updateProfile({ displayName: username });
+          await db.collection("users").doc(user.uid).set({
+            username: username,
+            isAnonymous: true,
+            createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+          });
+          window.location.href = "/dashboard.html";
+        }
+      } catch (error: any) {
+        hataGoster(authHatasi(error));
+      }
+    });
+
     anonymousBtn.addEventListener("click", () => {
       if (confirm("Warning: Your account is anonymous and all your data will be lost when you close this app or website. Continue?")) {
-        const modal = document.getElementById("username-modal");
-        if (modal) {
-          modal.classList.remove("hidden");
-          const confirmBtn = document.getElementById("username-confirm");
-          const input = document.getElementById("username-input") as HTMLInputElement | null;
-          
-          confirmBtn?.addEventListener("click", async () => {
-            const username = input?.value.trim();
-            if (!username) return alert("Please enter a username");
-            
-            try {
-              await auth.signInAnonymously();
-              const user = auth.currentUser;
-              if (user) {
-                await user.updateProfile({ displayName: username });
-                await db.collection("users").doc(user.uid).set({
-                  username: username,
-                  isAnonymous: true,
-                  createdAt: firebase.firestore.FieldValue.serverTimestamp(),
-                });
-                window.location.href = "/dashboard.html";
-              }
-            } catch (error: any) {
-              hataGoster(authHatasi(error));
-            }
-          });
-        }
+        modal?.classList.remove("hidden");
       }
     });
   }
