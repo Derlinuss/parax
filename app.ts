@@ -875,6 +875,11 @@ function panoyuBaslat(): void {
     window.location.href = "/settings.html";
   });
 
+  const mobileMenuBtn = document.getElementById("mobile-menu-btn");
+  mobileMenuBtn?.addEventListener("click", () => {
+    channelSidebar?.classList.toggle("show");
+  });
+
   // Server list
   dashboardUnsub = kullaniciSunuculari((servers) => {
     userServersCache = servers;

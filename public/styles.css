@@ -773,6 +773,17 @@ input {
   flex-shrink: 0;
 }
 
+.sidebar-toggle {
+  display: none;
+}
+
+@media (max-width: 768px) {
+  .sidebar-toggle {
+    display: block;
+    margin-right: 12px;
+  }
+}
+
 .chat-header strong {
   color: var(--text-primary);
 }
@@ -933,7 +944,7 @@ input {
   cursor: pointer;
 }
 
-@media (max-width: 600px) {
+@media (max-width: 768px) {
   /* Force stacking on mobile */
   .app-layout {
     flex-direction: column !important;

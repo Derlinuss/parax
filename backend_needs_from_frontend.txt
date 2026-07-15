@@ -1,0 +1,6 @@
+Backend Requirements from Frontend:
+-------------------------------------
+1. [COMPLETED] Channel Sidebar Toggle: Menu button added, CSS updated, JS toggle implemented.
+2. [COMPLETED] Responsive Layout Consistency: All breakpoints aligned to 768px.
+3. [COMPLETED] DOM IDs: #mobile-menu-btn added.
+4. [PENDING] State Persistence: Needs backend Firestore implementation for user profile sync.
