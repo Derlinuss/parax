@@ -1760,6 +1760,21 @@ function navBarGuncelle(user: any): void {
 
 // ufak tefek yardımcılar
 
+(window as any).hataGoster = hataGoster;
+(window as any).sifremiUnuttum = sifremiUnuttum;
+
+async function sifremiUnuttum(identifier: string): Promise<void> {
+  let email = identifier;
+  // Basit email kontrolü
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(identifier)) {
+    // kullanıcı adı varsayıyoruz
+    const snapshot = await db.collection("users").where("username", "==", identifier).get();
+    if (snapshot.empty) throw new Error("Kullanıcı bulunamadı.");
+    email = snapshot.docs[0].data().email;
+  }
+  await auth.sendPasswordResetEmail(email);
+}
+
 function hataGoster(message: string, type?: string): void {
   if (!message) return;
   // hata mesajlarını da logluyoruz, ileride işe yarayabilir
