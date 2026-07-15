@@ -934,29 +934,42 @@ input {
 }
 
 @media (max-width: 600px) {
-  /* Increase touch targets */
-  .btn, .server-item, .chat-input-bar input, .channel-item {
-    min-height: 44px;
-    padding: 12px;
+  /* Force stacking on mobile */
+  .app-layout {
+    flex-direction: column !important;
+    overflow-y: auto;
   }
   
-  /* Ensure chat area is prominent */
-  .chat-messages {
-    padding: 12px;
-  }
-  
-  .message {
-    font-size: 0.95rem;
-    padding: 10px 14px;
-  }
-  
-  /* Adjust sidebar widths on mobile */
   .server-sidebar {
-    width: 60px;
+    width: 100% !important;
+    height: auto !important;
+    flex-direction: row !important;
+    order: -1; /* Sidebar at the top */
   }
   
   .channel-sidebar {
-    width: 180px;
+    width: 100% !important;
+    height: auto !important;
+    order: 1;
+  }
+  
+  .main-content {
+    width: 100% !important;
+    flex: 1 !important;
+    order: 2;
+  }
+  
+  .member-list-sidebar {
+    display: none !important; /* Hide member list to save space */
+  }
+
+  /* Adjustments for better touch */
+  .chat-input-bar {
+    padding: 10px !important;
+  }
+  
+  .message {
+    max-width: 95% !important;
   }
 }
 
