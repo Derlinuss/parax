@@ -25,7 +25,8 @@
         this._db = firebase.firestore();
         this._ready = true;
       } catch (e) {
-        console.warn("[Para] Could not get Firestore:", e);
+        console.warn("[Para] Could not get Firestore, will retry in 1s:", e);
+        setTimeout(function () { Para.init(); }, 1000);
         return;
       }
 
