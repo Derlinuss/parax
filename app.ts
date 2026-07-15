@@ -1194,6 +1194,11 @@ function sunucuSec(code: string | null): void {
   welcomeState?.classList.add("hidden");
   chatArea?.classList.add("hidden");
   channelSidebar?.classList.remove("hidden");
+  // Show member list and load members
+  if (memberListSidebar) memberListSidebar.classList.remove("hidden");
+  memberListUnsub = uyeleriYukle(code, (members) => {
+    uyeListesiGoster(members, code);
+  });
 
   const server = userServersCache.find((s) => s.code === code);
   if (serverNameEl) {

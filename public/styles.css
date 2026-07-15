@@ -1294,6 +1294,7 @@ textarea::placeholder {
   height: calc(100vh - 56px);
   overflow: hidden;
   transition: padding-bottom 0.2s ease;
+  width: 100vw;
 }
 
 body:has(#voice-bar:not(.hidden)) .app-layout {
@@ -1916,7 +1917,7 @@ body:has(#voice-bar:not(.hidden)) .app-layout {
   display: flex;
   flex-direction: column;
   background: var(--bg-tertiary);
-  min-width: 0;
+  min-width: 300px;
   overflow: hidden;
   position: relative;
 }
