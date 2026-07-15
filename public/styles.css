@@ -33,6 +33,7 @@
   --radius-full: 9999px;
   --font: "gg sans", "Noto Sans", "Helvetica Neue", Helvetica, Arial, sans-serif;
   --transition: 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  --header-height: 48px; /* sohbet başlık yüksekliği */
 }
 
 html {
@@ -75,7 +76,7 @@ input {
   border: none;
 }
 
-/* ===== NAVBAR ===== */
+/* navbar (üst çubuk) */
 
 .navbar {
   display: flex;
@@ -148,7 +149,7 @@ input {
   text-decoration: none;
 }
 
-/* ===== HERO ===== */
+/* hero bölümü */
 
 .hero {
   display: flex;
@@ -226,7 +227,7 @@ input {
   justify-content: center;
 }
 
-/* ===== BUTTONS ===== */
+/* butonlar */
 
 .btn {
   display: inline-flex;
@@ -282,7 +283,7 @@ input {
   width: 100%;
 }
 
-/* ===== FEATURES ===== */
+/* özellikler */
 
 .features {
   padding: 80px 24px;
@@ -360,7 +361,7 @@ input {
   line-height: 1.6;
 }
 
-/* ===== CTA SECTION ===== */
+/* cta */
 
 .cta-section {
   text-align: center;
@@ -383,7 +384,7 @@ input {
   margin-bottom: 32px;
 }
 
-/* ===== FOOTER ===== */
+/* footer */
 
 .footer {
   padding: 32px 24px;
@@ -393,7 +394,7 @@ input {
   font-size: 0.82rem;
 }
 
-/* ===== AUTH PAGES ===== */
+/* giriş/kayıt sayfaları */
 
 .auth-wrapper {
   display: flex;
@@ -530,7 +531,7 @@ input {
   font-weight: 500;
 }
 
-/* ===== PASSWORD TOGGLE ===== */
+/* şifre göster/gizle */
 
 .password-wrapper {
   position: relative;
@@ -554,7 +555,7 @@ input {
   color: var(--text-primary);
 }
 
-/* ===== RESPONSIVE ===== */
+/* responsive */
 
 @media (max-width: 768px) {
   .hero h1 {
@@ -597,13 +598,13 @@ input {
   }
 }
 
-/* ===== HERO HIDDEN (logged in) ===== */
+/* giriş yapınca hero gizli */
 
 .hero-buttons.hidden {
   display: none;
 }
 
-/* ===== AUTH ERROR TOAST ===== */
+/* toast mesajları */
 
 .auth-error {
   position: fixed;
@@ -629,7 +630,7 @@ input {
   to { transform: translateX(0); opacity: 1; }
 }
 
-/* ===== DASHBOARD ===== */
+/* dashboard ana */
 
 .dashboard-wrapper {
   display: flex;
@@ -702,7 +703,7 @@ input {
   box-shadow: 0 0 0 2px rgba(88, 101, 242, 0.15);
 }
 
-/* ===== ROOM LIST ===== */
+/* oda listesi (home page) */
 
 .room-list {
   border-top: 1px solid var(--border);
@@ -751,7 +752,7 @@ input {
   font-size: 0.78rem;
 }
 
-/* ===== CHAT ===== */
+/* chat.html stilleri */
 
 .chat-wrapper {
   display: flex;
@@ -926,7 +927,7 @@ input {
   padding: 12px 24px;
 }
 
-/* ===== DASHBOARD NAVBAR ===== */
+/* dashboard navbar */
 
 .navbar-brand {
   cursor: pointer;
@@ -942,7 +943,7 @@ input {
   }
 }
 
-/* ===== USER MENU ===== */
+/* kullanıcı menüsü */
 
 .user-menu {
   display: flex;
@@ -1040,7 +1041,7 @@ input {
   color: var(--error);
 }
 
-/* ===== SETTINGS ===== */
+/* ayarlar sayfası */
 
 .settings-wrapper {
   display: flex;
@@ -1090,7 +1091,7 @@ input {
   flex: 1;
 }
 
-/* ===== AVATAR SECTION ===== */
+/* avatar kısmı */
 
 .avatar-section {
   display: flex;
@@ -1139,7 +1140,7 @@ input {
   padding: 8px 16px;
 }
 
-/* ===== SETTINGS TEXTAREA ===== */
+/* settings textarea */
 
 textarea {
   font-family: var(--font);
@@ -1170,7 +1171,7 @@ textarea::placeholder {
   cursor: not-allowed;
 }
 
-/* ===== MODAL OVERLAY ===== */
+/* modal arkaplanı */
 
 .modal-overlay {
   position: fixed;
@@ -1218,7 +1219,7 @@ textarea::placeholder {
   flex: 1;
 }
 
-/* ===== PASSWORD FIELD (dashboard create room) ===== */
+/* oda şifre input */
 
 .create-room {
   display: flex;
@@ -1281,7 +1282,7 @@ textarea::placeholder {
   cursor: pointer;
 }
 
-/* ===== APP LAYOUT (Discord-style) ===== */
+/* discord klonu layout */
 
 .navbar {
   z-index: 100;
@@ -1299,7 +1300,7 @@ body:has(#voice-bar:not(.hidden)) .app-layout {
   padding-bottom: 52px;
 }
 
-/* ===== SERVER SIDEBAR ===== */
+/* sunucu sidebar */
 
 .server-sidebar {
   width: 72px;
@@ -1479,7 +1480,7 @@ body:has(#voice-bar:not(.hidden)) .app-layout {
   line-height: 1;
 }
 
-/* ===== CHANNEL SIDEBAR ===== */
+/* kanal sidebar */
 
 .channel-sidebar {
   width: 240px;
@@ -1528,7 +1529,7 @@ body:has(#voice-bar:not(.hidden)) .app-layout {
   flex-shrink: 0;
 }
 
-/* ===== SERVER DROPDOWN ===== */
+/* sunucu dropdown */
 
 .server-dropdown {
   position: absolute;
@@ -1566,7 +1567,7 @@ body:has(#voice-bar:not(.hidden)) .app-layout {
   background: var(--bg-hover);
 }
 
-/* ===== MEMBER LIST SIDEBAR ===== */
+/* üye listesi */
 
 .member-list-sidebar {
   width: 240px;
@@ -1673,7 +1674,7 @@ body:has(#voice-bar:not(.hidden)) .app-layout {
   white-space: nowrap;
 }
 
-/* ===== ROLES MODAL ===== */
+/* roller modal */
 
 .modal-card-wide {
   max-width: 520px;
@@ -1747,7 +1748,7 @@ body:has(#voice-bar:not(.hidden)) .app-layout {
   color: var(--error);
 }
 
-/* ===== CHANNEL SIDEBAR (rest) ===== */
+/* kanal sidebar devamı */
 
 .channel-section {
   flex: 1 1 0;
@@ -1824,7 +1825,7 @@ body:has(#voice-bar:not(.hidden)) .app-layout {
   white-space: nowrap;
 }
 
-/* ===== CHANNEL SIDEBAR FOOTER (user profile) ===== */
+/* sidebar altı (kullanıcı profili) */
 
 .channel-sidebar-footer {
   padding: 8px;
@@ -1908,7 +1909,7 @@ body:has(#voice-bar:not(.hidden)) .app-layout {
   height: 18px;
 }
 
-/* ===== MAIN CONTENT ===== */
+/* ana içerik alanı */
 
 .main-content {
   flex: 1;
@@ -1995,7 +1996,7 @@ body:has(#voice-bar:not(.hidden)) .app-layout {
   height: 32px;
 }
 
-/* ===== CHAT AREA (inside dashboard) ===== */
+/* dashboard içindeki sohbet */
 
 .chat-header-info {
   font-size: 1rem;
@@ -2019,7 +2020,7 @@ body:has(#voice-bar:not(.hidden)) .app-layout {
   color: var(--text-muted);
 }
 
-/* ===== HOME STATE ROOMS ===== */
+/* anasayfa odaları */
 
 .home-rooms {
   margin-top: 16px;
@@ -2056,7 +2057,7 @@ body:has(#voice-bar:not(.hidden)) .app-layout {
   color: var(--brand);
 }
 
-/* ===== MODAL OVERRIDES ===== */
+/* modal düzenlemeleri */
 
 .modal-overlay .form-group {
   margin-bottom: 16px;
@@ -2098,7 +2099,7 @@ body:has(#voice-bar:not(.hidden)) .app-layout {
   user-select: none;
 }
 
-/* ===== VOICE CHANNELS ===== */
+/* ses kanalları */
 
 .channel-voice {
   color: var(--text-secondary);
@@ -2118,7 +2119,7 @@ body:has(#voice-bar:not(.hidden)) .app-layout {
   color: var(--text-muted);
 }
 
-/* ===== VOICE CONTAINER ===== */
+/* ses container */
 
 .voice-container {
   height: 320px;
@@ -2138,7 +2139,7 @@ body:has(#voice-bar:not(.hidden)) .app-layout {
   border-radius: 8px;
 }
 
-/* ===== VOICE BAR ===== */
+/* ses çubuğu */
 
 .voice-bar {
   position: fixed;
@@ -2240,7 +2241,7 @@ body:has(#voice-bar:not(.hidden)) .app-layout {
   animation: fadeIn 0.2s ease;
 }
 
-/* ===== CHANNEL TYPE OPTIONS (modal) ===== */
+/* kanal tipi seçimi */
 
 .channel-type-options {
   display: flex;
@@ -2282,7 +2283,7 @@ body:has(#voice-bar:not(.hidden)) .app-layout {
   background: rgba(88, 101, 242, 0.1);
 }
 
-/* ===== SCROLLBAR ===== */
+/* scrollbar */
 
 ::-webkit-scrollbar {
   width: 4px;
@@ -2301,7 +2302,7 @@ body:has(#voice-bar:not(.hidden)) .app-layout {
   background: var(--text-muted);
 }
 
-/* ===== ANIMATIONS ===== */
+/* animasyonlar */
 
 @keyframes fadeIn {
   from { opacity: 0; }
@@ -2380,4 +2381,9 @@ body:has(#voice-bar:not(.hidden)) .app-layout {
   .settings-footer {
     flex-direction: column;
   }
+}
+
+/* FIXME: electron'da google auth düzgün çalışmıyor, geçici çözüm */
+.electron-auth-fix {
+  display: none;
 }

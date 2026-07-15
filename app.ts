@@ -1,4 +1,4 @@
-// Firebase Compat SDK - loaded via CDN script tags in HTML
+// Firebase'den gelen SDK'lar HTML'de script tag'i ile yükleniyor
 declare const firebase: any;
 declare const Para: any;
 declare const ParaVoice: any;
@@ -18,48 +18,49 @@ const auth = firebase.auth();
 const db = firebase.firestore();
 db.settings({ merge: true });
 
-async function handleRedirectResult(): Promise<void> {
+// Electron'daki yönlendirme sonucunu yakala (google sign-in)
+async function yonlendirmeSonuc() {
   try {
     const cred = await auth.getRedirectResult();
-    await createUserDocIfNew(cred);
+    await yeniKullaniciKaydi(cred);
   } catch {
-    // Not a redirect result, ignore
+    // yönlendirme sonucu yoksa sorun değil
   }
 }
 
 document.addEventListener("DOMContentLoaded", async () => {
-  await handleRedirectResult();
+  await yonlendirmeSonuc();
 
   const page = window.location.pathname.split("/").pop() || "";
 
-  initPasswordToggles();
+  sifreGosterGizle();
 
   if (page === "signup.html" || page.startsWith("signup")) {
-    initSignupValidation();
+    kayitKontrol();
   }
 
   if (page === "login.html" || page.startsWith("login")) {
-    initLoginValidation();
+    girisKontrol();
   }
 
-  initAuthStateListener(page);
+  oturumDinle(page);
 
   if (page === "dashboard.html") {
-    initDashboard();
+    panoyuBaslat();
   }
 
   if (page === "chat.html") {
-    initChat();
+    sohbetiBaslat();
   }
 
   if (page === "settings.html") {
-    initSettings();
+    ayarlariBaslat();
   }
 });
 
-/* ===== FIREBASE AUTH ===== */
+// -------- giriş / kayıt işlemleri -------- 
 
-function setPersistence(remember: boolean): void {
+function kalicilikAyarla(remember: boolean): void {
   if (remember) {
     auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL);
   } else {
@@ -67,37 +68,38 @@ function setPersistence(remember: boolean): void {
   }
 }
 
-async function handleSignup(username: string, email: string, password: string): Promise<void> {
-  const cred = await auth.createUserWithEmailAndPassword(email, password);
+async function yeniKayit(kullaniciAdi: string, email: string, sifre: string) {
+  const cred = await auth.createUserWithEmailAndPassword(email, sifre);
   const user = cred.user;
-  await user.updateProfile({ displayName: username });
+  await user.updateProfile({ displayName: kullaniciAdi });
   await db.collection("users").doc(user.uid).set({
-    username,
+    username: kullaniciAdi,
     email,
     createdAt: firebase.firestore.FieldValue.serverTimestamp(),
   });
 }
 
-async function handleLogin(email: string, password: string): Promise<void> {
-  await auth.signInWithEmailAndPassword(email, password);
+async function girisYap(email: string, sifre: string) {
+  await auth.signInWithEmailAndPassword(email, sifre);
 }
 
-async function handleGoogleAuth(): Promise<void> {
+async function googleIleGir() {
+  // electron'da popup çalışmıyor, local server üzerinden yapıyoruz
   const isElectron = !!(window as any).electronAPI?.isElectron;
   if (isElectron) {
     const tokens = await (window as any).electronAPI.signInWithGoogle();
-    const credential = firebase.auth.GoogleAuthProvider.credential(tokens.idToken);
+    const credential = firebase.auth.GoogleAuthProvider.credential(tokens.idToken, tokens.accessToken);
     const cred = await auth.signInWithCredential(credential);
-    await createUserDocIfNew(cred);
+    await yeniKullaniciKaydi(cred);
     return;
   }
   const provider = new firebase.auth.GoogleAuthProvider();
   provider.setCustomParameters({ prompt: "select_account" });
   const cred = await auth.signInWithPopup(provider);
-  await createUserDocIfNew(cred);
+  await yeniKullaniciKaydi(cred);
 }
 
-async function createUserDocIfNew(cred: any): Promise<void> {
+async function yeniKullaniciKaydi(cred: any) {
   if (cred?.additionalUserInfo?.isNewUser) {
     const user = cred.user;
     await db.collection("users").doc(user.uid).set({
@@ -108,7 +110,7 @@ async function createUserDocIfNew(cred: any): Promise<void> {
   }
 }
 
-function handleAuthError(error: any): string {
+function authHatasi(error: any): string {
   const code = error.code;
   if (code === "auth/user-not-found" || code === "auth/invalid-credential") {
     return "Invalid email or password.";
@@ -125,16 +127,16 @@ function handleAuthError(error: any): string {
   return error.message || "Something went wrong.";
 }
 
-/* ===== ROOM FUNCTIONS ===== */
+// --- oda işlemleri (eski chat odaları) --- 
 
-function generateRoomCode(): string {
+function odaKoduOlustur(): string {
   const digits = new Uint8Array(11);
   crypto.getRandomValues(digits);
   return String.fromCharCode(49 + digits[0] % 9) +
     Array.from(digits.slice(1), (b) => String.fromCharCode(48 + b % 10)).join("");
 }
 
-async function hashPassword(password: string): Promise<string> {
+async function sifreHashle(password: string): Promise<string> {
   const encoder = new TextEncoder();
   const data = encoder.encode(password);
   const hashBuffer = await crypto.subtle.digest("SHA-256", data);
@@ -142,48 +144,49 @@ async function hashPassword(password: string): Promise<string> {
   return hashArray.map((b) => b.toString(16).padStart(2, "0")).join("");
 }
 
-async function createRoom(password?: string): Promise<string> {
-  const code = generateRoomCode();
+async function odaAc(password?: string): Promise<string> {
+  const code = odaKoduOlustur();
   const user = auth.currentUser;
+  // burada odayı firestore'a yazıyoruz
   const data: any = {
     createdBy: user.uid,
     createdByName: user.displayName || "Unknown",
     createdAt: firebase.firestore.FieldValue.serverTimestamp(),
   };
   if (password) {
-    data.passwordHash = await hashPassword(password);
+    data.passwordHash = await sifreHashle(password);
   }
   await db.collection("rooms").doc(code).set(data);
   return code;
 }
 
-async function getRoom(code: string): Promise<any> {
+async function odaGetir(code: string): Promise<any> {
   const doc = await db.collection("rooms").doc(code).get();
   return doc.exists ? { code: doc.id, ...doc.data() } : null;
 }
 
-async function roomExists(code: string): Promise<boolean> {
+async function odaVarMi(code: string): Promise<boolean> {
   const doc = await db.collection("rooms").doc(code).get();
   return doc.exists;
 }
 
-/* ===== SERVER FUNCTIONS ===== */
+// ---- sunucular ----
 
 const PARAX_OFFICIAL_CODE = "00000000001";
 
-function generateServerCode(): string {
+function sunucuKoduOlustur(): string {
   const digits = new Uint8Array(11);
   crypto.getRandomValues(digits);
   return String.fromCharCode(49 + digits[0] % 9) +
     Array.from(digits.slice(1), (b) => String.fromCharCode(48 + b % 10)).join("");
 }
 
-function memberDocId(uid: string, serverCode: string): string {
+function uyeDokumanId(uid: string, serverCode: string): string {
   return uid + "|" + serverCode;
 }
 
-async function ensureParaxOfficial(): Promise<boolean> {
-  const exists = await serverExists(PARAX_OFFICIAL_CODE);
+async function paraxResmiKontrol(): Promise<boolean> {
+  const exists = await sunucuVarMi(PARAX_OFFICIAL_CODE);
   if (exists) return true;
   try {
     const admin = auth.currentUser;
@@ -204,13 +207,14 @@ async function ensureParaxOfficial(): Promise<boolean> {
     });
     return true;
   } catch (e) {
-    if (typeof Para !== "undefined") Para.capture(e, { type: "manual", context: "ensureParaxOfficial" });
+    // bazen para tanımlı olmayabiliyor, o yüzden check ediyoruz
+    if (typeof Para !== "undefined") Para.capture(e, { type: "manual", context: "paraxResmiKontrol" });
     return false;
   }
 }
 
-async function createServer(name: string, joinType: string = "open"): Promise<string> {
-  const code = generateServerCode();
+async function sunucuAc(name: string, joinType: string = "open"): Promise<string> {
+  const code = sunucuKoduOlustur();
   const user = auth.currentUser;
   await db.collection("servers").doc(code).set({
     name,
@@ -223,17 +227,17 @@ async function createServer(name: string, joinType: string = "open"): Promise<st
     name: "general",
     createdAt: firebase.firestore.FieldValue.serverTimestamp(),
   });
-  await db.collection("serverMembers").doc(memberDocId(user.uid, code)).set({
+  await db.collection("serverMembers").doc(uyeDokumanId(user.uid, code)).set({
     userId: user.uid,
     serverCode: code,
     joinedAt: firebase.firestore.FieldValue.serverTimestamp(),
     roles: ["admin"],
   });
-  await createDefaultRoles(code);
+  await varsayilanRoller(code);
   return code;
 }
 
-/* ===== ROLE FUNCTIONS ===== */
+// roller ve izinler
 
 const DEFAULT_PERMISSIONS = {
   administrator: false,
@@ -257,7 +261,7 @@ const ADMIN_PERMISSIONS = {
   speak: true,
 };
 
-async function createDefaultRoles(serverCode: string): Promise<void> {
+async function varsayilanRoller(serverCode: string): Promise<void> {
   const rolesRef = db.collection("servers").doc(serverCode).collection("roles");
   await rolesRef.add({
     name: "@everyone",
@@ -277,19 +281,19 @@ async function createDefaultRoles(serverCode: string): Promise<void> {
   });
 }
 
-async function getServerOwner(serverCode: string): Promise<string | null> {
+async function sunucuSahibi(serverCode: string): Promise<string | null> {
   const doc = await db.collection("servers").doc(serverCode).get();
   return doc.exists ? doc.data()?.ownerId || null : null;
 }
 
-async function userHasPermission(serverCode: string, permission: string): Promise<boolean> {
+async function yetkisiVarMi(serverCode: string, permission: string): Promise<boolean> {
   const user = auth.currentUser;
   if (!user) return false;
 
-  const ownerId = await getServerOwner(serverCode);
+  const ownerId = await sunucuSahibi(serverCode);
   if (ownerId === user.uid) return true;
 
-  const memberDoc = await db.collection("serverMembers").doc(memberDocId(user.uid, serverCode)).get();
+  const memberDoc = await db.collection("serverMembers").doc(uyeDokumanId(user.uid, serverCode)).get();
   if (!memberDoc.exists) return false;
   const memberData = memberDoc.data() || {};
   const userRoleIds: string[] = memberData.roles || [];
@@ -307,11 +311,11 @@ async function userHasPermission(serverCode: string, permission: string): Promis
   return false;
 }
 
-async function getUserRoles(serverCode: string): Promise<{ name: string; color: string }[]> {
+async function kullaniciRolleri(serverCode: string): Promise<{ name: string; color: string }[]> {
   const user = auth.currentUser;
   if (!user) return [];
 
-  const memberDoc = await db.collection("serverMembers").doc(memberDocId(user.uid, serverCode)).get();
+  const memberDoc = await db.collection("serverMembers").doc(uyeDokumanId(user.uid, serverCode)).get();
   if (!memberDoc.exists) return [];
   const memberData = memberDoc.data() || {};
   const userRoleNames: string[] = memberData.roles || [];
@@ -325,12 +329,12 @@ async function getUserRoles(serverCode: string): Promise<{ name: string; color: 
   return roles.map((r: any) => ({ name: r.name, color: r.color || "#949ba4" }));
 }
 
-async function getTopRoleColor(serverCode: string): Promise<string | null> {
-  const roles = await getUserRoles(serverCode);
+async function enUstRolRengi(serverCode: string): Promise<string | null> {
+  const roles = await kullaniciRolleri(serverCode);
   return roles.length > 0 ? roles[0].color : null;
 }
 
-function loadServerRoles(serverCode: string, callback: (roles: any[]) => void): () => void {
+function rolleriYukle(serverCode: string, callback: (roles: any[]) => void): () => void {
   return db.collection("servers").doc(serverCode).collection("roles")
     .orderBy("priority", "desc")
     .onSnapshot((snapshot: any) => {
@@ -341,11 +345,11 @@ function loadServerRoles(serverCode: string, callback: (roles: any[]) => void): 
       callback(roles);
     }, (error: any) => {
       console.error("Roles error:", error);
-      if (typeof Para !== "undefined") Para.capture(error, { type: "firestore", context: "loadServerRoles" });
+      if (typeof Para !== "undefined") Para.capture(error, { type: "firestore", context: "rolleriYukle" });
     });
 }
 
-function loadServerMembers(serverCode: string, callback: (members: any[]) => void): () => void {
+function uyeleriYukle(serverCode: string, callback: (members: any[]) => void): () => void {
   return db.collection("serverMembers")
     .where("serverCode", "==", serverCode)
     .onSnapshot(async (snapshot: any) => {
@@ -392,32 +396,32 @@ function loadServerMembers(serverCode: string, callback: (members: any[]) => voi
       callback(enriched);
     }, (error: any) => {
       console.error("Members error:", error);
-      if (typeof Para !== "undefined") Para.capture(error, { type: "firestore", context: "loadServerMembers" });
+      if (typeof Para !== "undefined") Para.capture(error, { type: "firestore", context: "uyeleriYukle" });
     });
 }
 
-async function getServer(code: string): Promise<any> {
+async function sunucuGetir(code: string): Promise<any> {
   const doc = await db.collection("servers").doc(code).get();
   return doc.exists ? { code: doc.id, ...doc.data() } : null;
 }
 
-async function serverExists(code: string): Promise<boolean> {
+async function sunucuVarMi(code: string): Promise<boolean> {
   const doc = await db.collection("servers").doc(code).get();
   return doc.exists;
 }
 
-async function joinServer(code: string, inviteCode?: string): Promise<boolean> {
+async function sunucuyaKatil(code: string, inviteCode?: string): Promise<boolean> {
   const user = auth.currentUser;
-  let exists = await serverExists(code);
+  let exists = await sunucuVarMi(code);
   if (!exists) {
     if (code === PARAX_OFFICIAL_CODE) {
-      const ok = await ensureParaxOfficial();
+      const ok = await paraxResmiKontrol();
       if (!ok) return false;
     } else {
       return false;
     }
   }
-  const docId = memberDocId(user.uid, code);
+  const docId = uyeDokumanId(user.uid, code);
   const existing = await db.collection("serverMembers").doc(docId).get();
   if (existing.exists) return true;
 
@@ -440,7 +444,7 @@ async function joinServer(code: string, inviteCode?: string): Promise<boolean> {
   return true;
 }
 
-async function generateInviteCode(serverCode: string): Promise<string> {
+async function davetKoduOlustur(serverCode: string): Promise<string> {
   const arr = new Uint8Array(6);
   crypto.getRandomValues(arr);
   const inviteCode = Array.from(arr).map((b) => b.toString(36).padStart(2, "0")).join("").slice(0, 10);
@@ -451,7 +455,7 @@ async function generateInviteCode(serverCode: string): Promise<string> {
   return inviteCode;
 }
 
-function loadServerInvites(serverCode: string, callback: (invites: any[]) => void): () => void {
+function davetleriYukle(serverCode: string, callback: (invites: any[]) => void): () => void {
   return db.collection("servers").doc(serverCode).collection("serverInvites")
     .orderBy("createdAt", "desc")
     .onSnapshot((snapshot: any) => {
@@ -465,32 +469,32 @@ function loadServerInvites(serverCode: string, callback: (invites: any[]) => voi
     });
 }
 
-function renderInvitesList(): void {
+function davetListesiGoster(): void {
   if (!currentServerCode) return;
   const container = document.getElementById("invites-list");
   if (!container) return;
   container.innerHTML = '<div style="color:var(--text-muted);font-size:0.85rem;padding:8px;">Loading invites...</div>';
-  loadServerInvites(currentServerCode, (invites) => {
+  davetleriYukle(currentServerCode, (invites) => {
     if (invites.length === 0) {
       container.innerHTML = '<div style="color:var(--text-muted);font-size:0.85rem;padding:8px;">No invites yet. Generate one above.</div>';
       return;
     }
     container.innerHTML = invites.map((inv) =>
       `<div style="display:flex;align-items:center;justify-content:space-between;background:var(--bg-tertiary);padding:8px 12px;border-radius:var(--radius);">
-        <code style="font-size:0.9rem;color:var(--brand);font-weight:600;">${escapeHtml(inv.code)}</code>
-        <button class="btn btn-sm btn-secondary" onclick="navigator.clipboard.writeText('${escapeHtml(inv.code)}');showAuthError('Copied!','success')">Copy</button>
+        <code style="font-size:0.9rem;color:var(--brand);font-weight:600;">${temizle(inv.code)}</code>
+        <button class="btn btn-sm btn-secondary" onclick="navigator.clipboard.writeText('${temizle(inv.code)}');hataGoster('Copied!','success')">Copy</button>
       </div>`
     ).join("");
   });
 }
 
-async function isServerMember(code: string): Promise<boolean> {
+async function sunucuUyesiMi(code: string): Promise<boolean> {
   const user = auth.currentUser;
-  const doc = await db.collection("serverMembers").doc(memberDocId(user.uid, code)).get();
+  const doc = await db.collection("serverMembers").doc(uyeDokumanId(user.uid, code)).get();
   return doc.exists;
 }
 
-function loadUserServers(callback: (servers: any[]) => void): () => void {
+function kullaniciSunuculari(callback: (servers: any[]) => void): () => void {
   const user = auth.currentUser;
   if (!user) return () => {};
 
@@ -509,7 +513,7 @@ function loadUserServers(callback: (servers: any[]) => void): () => void {
       let pending = serverCodes.length;
       const servers: any[] = [];
       serverCodes.forEach((code: string) => {
-        getServer(code).then((server) => {
+        sunucuGetir(code).then((server) => {
           if (server) servers.push(server);
           pending--;
           if (pending === 0) {
@@ -520,16 +524,16 @@ function loadUserServers(callback: (servers: any[]) => void): () => void {
       });
     }, (error: any) => {
       console.error("Server memberships error:", error);
-      if (typeof Para !== "undefined") Para.capture(error, { type: "firestore", context: "loadUserServers" });
+      if (typeof Para !== "undefined") Para.capture(error, { type: "firestore", context: "kullaniciSunuculari" });
       callback([]);
     });
 
   return () => membershipQuery();
 }
 
-/* ===== CHANNEL FUNCTIONS ===== */
+// kanal işlemleri
 
-async function createChannel(serverCode: string, name: string, type?: string): Promise<string> {
+async function kanalAc(serverCode: string, name: string, type?: string): Promise<string> {
   const data: any = {
     name: name.toLowerCase().replace(/\s+/g, "-"),
     createdAt: firebase.firestore.FieldValue.serverTimestamp(),
@@ -539,7 +543,7 @@ async function createChannel(serverCode: string, name: string, type?: string): P
   return ref.id;
 }
 
-function loadServerChannels(serverCode: string, callback: (channels: any[]) => void): () => void {
+function kanallariYukle(serverCode: string, callback: (channels: any[]) => void): () => void {
   return db.collection("servers").doc(serverCode).collection("channels")
     .orderBy("createdAt", "asc")
     .onSnapshot((snapshot: any) => {
@@ -550,15 +554,16 @@ function loadServerChannels(serverCode: string, callback: (channels: any[]) => v
       callback(channels);
     }, (error: any) => {
       console.error("Channels error:", error);
-      if (typeof Para !== "undefined") Para.capture(error, { type: "firestore", context: "loadServerChannels" });
+      if (typeof Para !== "undefined") Para.capture(error, { type: "firestore", context: "kanallariYukle" });
     });
 }
 
-/* ===== CHANNEL MESSAGE FUNCTIONS ===== */
+// mesaj gonderme (kanal)
 
-async function sendChannelMessage(channelId: string, text: string): Promise<void> {
+async function kanalMesajGonder(channelId: string, text: string): Promise<void> {
   const user = auth.currentUser;
   if (!text.trim()) return;
+  console.log("kanalMesajGonder:", channelId, text.substring(0, 30)); // debug
   await db.collection("messages").add({
     channelId,
     senderId: user.uid,
@@ -568,7 +573,7 @@ async function sendChannelMessage(channelId: string, text: string): Promise<void
   });
 }
 
-function loadChannelMessages(channelId: string, callback: (messages: any[]) => void): () => void {
+function kanalMesajlariYukle(channelId: string, callback: (messages: any[]) => void): () => void {
   return db.collection("messages")
     .where("channelId", "==", channelId)
     .onSnapshot((snapshot: any) => {
@@ -580,15 +585,15 @@ function loadChannelMessages(channelId: string, callback: (messages: any[]) => v
       callback(messages);
     }, (error: any) => {
       console.error("Channel messages error:", error);
-      if (typeof Para !== "undefined") Para.capture(error, { type: "firestore", context: "loadChannelMessages" });
+      if (typeof Para !== "undefined") Para.capture(error, { type: "firestore", context: "kanalMesajlariYukle" });
       const el = document.getElementById("server-messages");
       if (el) el.innerHTML = `<div class="chat-error">Failed to load messages.</div>`;
     });
 }
 
-/* ===== MESSAGE FUNCTIONS ===== */
+// ----- evrensel mesaj (eski sistem) -----
 
-async function sendMessage(roomCode: string, text: string): Promise<void> {
+async function mesajGonder(roomCode: string, text: string): Promise<void> {
   const user = auth.currentUser;
   if (!text.trim()) return;
   await db.collection("messages").add({
@@ -600,7 +605,7 @@ async function sendMessage(roomCode: string, text: string): Promise<void> {
   });
 }
 
-function loadMessages(roomCode: string, callback: (messages: any[]) => void): () => void {
+function mesajlariYukle(roomCode: string, callback: (messages: any[]) => void): () => void {
   return db.collection("messages")
     .where("roomCode", "==", roomCode)
     .onSnapshot((snapshot: any) => {
@@ -612,13 +617,13 @@ function loadMessages(roomCode: string, callback: (messages: any[]) => void): ()
       callback(messages);
     }, (error: any) => {
       console.error("Messages error:", error);
-      if (typeof Para !== "undefined") Para.capture(error, { type: "firestore", context: "loadMessages" });
+      if (typeof Para !== "undefined") Para.capture(error, { type: "firestore", context: "mesajlariYukle" });
       const el = document.getElementById("chat-messages");
       if (el) el.innerHTML = `<div class="chat-error">Failed to load messages. Check console for details.</div>`;
     });
 }
 
-function loadUserRooms(callback: (rooms: any[]) => void): () => void {
+function kullaniciOdalari(callback: (rooms: any[]) => void): () => void {
   const user = auth.currentUser;
   if (!user) return () => {};
   return db.collection("rooms")
@@ -632,22 +637,22 @@ function loadUserRooms(callback: (rooms: any[]) => void): () => void {
       callback(rooms);
     }, (error: any) => {
       console.error("Rooms error:", error);
-      if (typeof Para !== "undefined") Para.capture(error, { type: "firestore", context: "loadUserRooms" });
+      if (typeof Para !== "undefined") Para.capture(error, { type: "firestore", context: "kullaniciOdalari" });
     });
 }
 
-/* ===== PROFILE FUNCTIONS ===== */
+// profil - avatar yükleme falan
 
-async function loadProfile(uid: string): Promise<any> {
+async function profilGetir(uid: string): Promise<any> {
   const doc = await db.collection("users").doc(uid).get();
   return doc.data() || {};
 }
 
-async function saveProfile(uid: string, data: any): Promise<void> {
+async function profilKaydet(uid: string, data: any): Promise<void> {
   await db.collection("users").doc(uid).update(data);
 }
 
-async function uploadAvatar(uid: string, file: File): Promise<string> {
+async function avatarYukle(uid: string, file: File): Promise<string> {
   const ref = firebase.storage().ref("profiles/" + uid + "/avatar.jpg");
   const snapshot = await ref.put(file);
   const downloadUrl = await snapshot.ref.getDownloadURL();
@@ -655,7 +660,7 @@ async function uploadAvatar(uid: string, file: File): Promise<string> {
   return downloadUrl;
 }
 
-async function removeAvatar(uid: string): Promise<void> {
+async function avatarSil(uid: string): Promise<void> {
   try {
     const ref = firebase.storage().ref("profiles/" + uid + "/avatar.jpg");
     await ref.delete();
@@ -663,9 +668,9 @@ async function removeAvatar(uid: string): Promise<void> {
   await db.collection("users").doc(uid).update({ photoURL: "" });
 }
 
-/* ===== SETTINGS ===== */
+// settings sayfası
 
-function initSettings(): void {
+function ayarlariBaslat(): void {
   const user = auth.currentUser;
   if (!user) return;
 
@@ -681,7 +686,7 @@ function initSettings(): void {
 
   if (emailInput) emailInput.value = user.email || "";
 
-  loadProfile(user.uid).then((profile) => {
+  profilGetir(user.uid).then((profile) => {
     if (usernameInput) usernameInput.value = profile.username || user.displayName || "";
     if (bioInput) bioInput.value = profile.bio || "";
     if (profile.photoURL) {
@@ -697,18 +702,18 @@ function initSettings(): void {
     const file = fileInput.files?.[0];
     if (!file) return;
     if (file.size > 5 * 1024 * 1024) {
-      showAuthError("Image must be under 5MB");
+      hataGoster("Image must be under 5MB");
       return;
     }
     uploadBtn!.textContent = "Uploading...";
     (uploadBtn as HTMLButtonElement).disabled = true;
     try {
-      const url = await uploadAvatar(user.uid, file);
+      const url = await avatarYukle(user.uid, file);
       if (avatarImg) { avatarImg.src = url; avatarImg.style.display = "block"; }
       if (avatarPlaceholder) avatarPlaceholder.style.display = "none";
       if (removeBtn) removeBtn.style.display = "";
     } catch (error: any) {
-      showAuthError("Upload failed: " + error.message);
+      hataGoster("Upload failed: " + error.message);
     }
     uploadBtn!.textContent = "Upload Photo";
     (uploadBtn as HTMLButtonElement).disabled = false;
@@ -717,12 +722,12 @@ function initSettings(): void {
 
   removeBtn?.addEventListener("click", async () => {
     try {
-      await removeAvatar(user.uid);
+      await avatarSil(user.uid);
       if (avatarImg) { avatarImg.src = ""; avatarImg.style.display = "none"; }
       if (avatarPlaceholder) avatarPlaceholder.style.display = "";
       removeBtn.style.display = "none";
     } catch (error: any) {
-      showAuthError("Failed to remove photo");
+      hataGoster("Failed to remove photo");
     }
   });
 
@@ -731,7 +736,7 @@ function initSettings(): void {
     const bio = bioInput?.value.trim() || "";
 
     if (username.length < 3 || username.length > 32) {
-      showAuthError("Display name must be 3-32 characters");
+      hataGoster("Display name must be 3-32 characters");
       return;
     }
 
@@ -740,10 +745,10 @@ function initSettings(): void {
 
     try {
       await user.updateProfile({ displayName: username });
-      await saveProfile(user.uid, { username, bio });
-      showAuthError("Profile saved!");
+      await profilKaydet(user.uid, { username, bio });
+      hataGoster("Profile saved!");
     } catch (error: any) {
-      showAuthError("Save failed: " + error.message);
+      hataGoster("Save failed: " + error.message);
     }
 
     saveBtn.textContent = "Save Changes";
@@ -751,7 +756,7 @@ function initSettings(): void {
   });
 }
 
-/* ===== DASHBOARD (Discord-style) ===== */
+// ====== ANA PANO (discord klonu) ======
 
 let dashboardUnsub: (() => void) | null = null;
 let serverChannelsUnsub: (() => void) | null = null;
@@ -761,8 +766,8 @@ let currentChannelId: string | null = null;
 let userServersCache: any[] = [];
 let memberListUnsub: (() => void) | null = null;
 
-function initDashboard(): void {
-  handleRedirectResult().catch(() => {});
+function panoyuBaslat(): void {
+  yonlendirmeSonuc().catch(() => {});
 
   const serverList = document.getElementById("server-list");
   const channelSidebar = document.getElementById("channel-sidebar");
@@ -788,7 +793,7 @@ function initDashboard(): void {
     if (profileAvatar) {
       profileAvatar.innerHTML = `<div class="initials">${(user.displayName || user.email || "U")[0].toUpperCase()}</div>`;
     }
-    loadProfile(user.uid).then((p) => {
+    profilGetir(user.uid).then((p) => {
       if (p.photoURL && profileAvatar) {
         profileAvatar.innerHTML = `<img src="${p.photoURL}" alt="" />`;
       }
@@ -804,7 +809,7 @@ function initDashboard(): void {
   }
 
   logoutBtn?.addEventListener("click", async () => {
-    cleanupSubs();
+    abonelikleriTemizle();
     await auth.signOut();
     window.location.href = "/";
   });
@@ -814,60 +819,60 @@ function initDashboard(): void {
   });
 
   // Server list
-  dashboardUnsub = loadUserServers((servers) => {
+  dashboardUnsub = kullaniciSunuculari((servers) => {
     userServersCache = servers;
-    renderServerList(servers);
+    sunucuListesiGoster(servers);
 
     // If current server was removed, go back
     if (currentServerCode && !servers.find((s: any) => s.code === currentServerCode)) {
-      selectServer(null);
+      sunucuSec(null);
     }
   });
 
   // Home button
   document.getElementById("home-btn")?.addEventListener("click", () => {
-    selectServer(null);
+    sunucuSec(null);
   });
 
   // Official server button
   document.getElementById("official-server-btn")?.addEventListener("click", async () => {
     const code = PARAX_OFFICIAL_CODE;
     try {
-      const joined = await joinServer(code);
+      const joined = await sunucuyaKatil(code);
       if (joined) {
-        selectServer(code);
+        sunucuSec(code);
       } else {
-        showAuthError("Could not join Parax Official");
+        hataGoster("Could not join Parax Official");
       }
     } catch (err: any) {
-      showAuthError("Failed: " + err.message);
+      hataGoster("Failed: " + err.message);
     }
   });
 
   // Add server button
   document.getElementById("add-server-btn")?.addEventListener("click", () => {
-    showModal("create-server-modal");
+    gosterModal("create-server-modal");
     document.getElementById("server-name-input")?.focus();
   });
 
   // Create server modal
   document.getElementById("create-server-cancel")?.addEventListener("click", () => {
-    hideModal("create-server-modal");
+    gizleModal("create-server-modal");
   });
   document.getElementById("create-server-confirm")?.addEventListener("click", async () => {
     const input = document.getElementById("server-name-input") as HTMLInputElement;
     const name = input?.value.trim();
     if (!name) {
-      showAuthError("Server name is required");
+      hataGoster("Server name is required");
       return;
     }
     try {
-      hideModal("create-server-modal");
+      gizleModal("create-server-modal");
       input.value = "";
-      const code = await createServer(name);
-      selectServer(code);
+      const code = await sunucuAc(name);
+      sunucuSec(code);
     } catch (err: any) {
-      showAuthError("Failed to create server: " + err.message);
+      hataGoster("Failed to create server: " + err.message);
     }
   });
   document.getElementById("server-name-input")?.addEventListener("keypress", (e) => {
@@ -876,35 +881,35 @@ function initDashboard(): void {
 
   // Join server modal
   document.getElementById("join-server-btn")?.addEventListener("click", () => {
-    showModal("join-server-modal");
+    gosterModal("join-server-modal");
     document.getElementById("join-server-input")?.focus();
   });
   document.getElementById("join-server-cancel")?.addEventListener("click", () => {
-    hideModal("join-server-modal");
+    gizleModal("join-server-modal");
     document.getElementById("join-invite-group")!.style.display = "none";
   });
   document.getElementById("join-server-confirm")?.addEventListener("click", async () => {
     const input = document.getElementById("join-server-input") as HTMLInputElement;
     const code = input?.value.trim();
     if (!code || code.length !== 11 || !/^\d{11}$/.test(code)) {
-      showAuthError("Enter a valid 11-digit server code");
+      hataGoster("Enter a valid 11-digit server code");
       return;
     }
     const inviteInput = document.getElementById("join-invite-input") as HTMLInputElement;
     const inviteCode = inviteInput?.value.trim() || undefined;
     try {
-      const joined = await joinServer(code, inviteCode);
+      const joined = await sunucuyaKatil(code, inviteCode);
       if (!joined) {
-        showAuthError("Server not found or invalid invite code");
+        hataGoster("Server not found or invalid invite code");
         return;
       }
-      hideModal("join-server-modal");
+      gizleModal("join-server-modal");
       document.getElementById("join-invite-group")!.style.display = "none";
       input.value = "";
       if (inviteInput) inviteInput.value = "";
-      selectServer(code);
+      sunucuSec(code);
     } catch (err: any) {
-      showAuthError("Failed to join: " + err.message);
+      hataGoster("Failed to join: " + err.message);
     }
   });
   document.getElementById("join-server-input")?.addEventListener("keypress", (e) => {
@@ -931,34 +936,34 @@ function initDashboard(): void {
   // Create channel modal
   document.getElementById("add-channel-btn")?.addEventListener("click", async () => {
     if (currentServerCode) {
-      const allowed = await userHasPermission(currentServerCode, "manage_channels");
+      const allowed = await yetkisiVarMi(currentServerCode, "manage_channels");
       if (!allowed) {
-        showAuthError("You don't have permission to create channels");
+        hataGoster("You don't have permission to create channels");
         return;
       }
     }
-    showModal("create-channel-modal");
+    gosterModal("create-channel-modal");
     document.getElementById("channel-name-input")?.focus();
   });
   document.getElementById("create-channel-cancel")?.addEventListener("click", () => {
-    hideModal("create-channel-modal");
+    gizleModal("create-channel-modal");
   });
   document.getElementById("create-channel-confirm")?.addEventListener("click", async () => {
     const input = document.getElementById("channel-name-input") as HTMLInputElement;
     const name = input?.value.trim().toLowerCase().replace(/\s+/g, "-");
     if (!name) {
-      showAuthError("Channel name is required");
+      hataGoster("Channel name is required");
       return;
     }
     if (!currentServerCode) return;
     const typeEl = document.querySelector('input[name="channel-type"]:checked') as HTMLInputElement;
     const type = typeEl?.value || "text";
     try {
-      hideModal("create-channel-modal");
+      gizleModal("create-channel-modal");
       input.value = "";
-      await createChannel(currentServerCode, name, type);
+      await kanalAc(currentServerCode, name, type);
     } catch (err: any) {
-      showAuthError("Failed to create channel: " + err.message);
+      hataGoster("Failed to create channel: " + err.message);
     }
   });
   document.getElementById("channel-name-input")?.addEventListener("keypress", (e) => {
@@ -969,15 +974,15 @@ function initDashboard(): void {
   document.getElementById("server-leave-btn")?.addEventListener("click", async () => {
     if (!currentServerCode || !user) return;
     if (currentServerCode === PARAX_OFFICIAL_CODE) {
-      showAuthError("Cannot leave the official server");
+      hataGoster("Cannot leave the official server");
       return;
     }
     if (!confirm("Leave this server?")) return;
     try {
-      await db.collection("serverMembers").doc(memberDocId(user.uid, currentServerCode)).delete();
-      selectServer(null);
+      await db.collection("serverMembers").doc(uyeDokumanId(user.uid, currentServerCode)).delete();
+      sunucuSec(null);
     } catch (err: any) {
-      showAuthError("Failed to leave: " + err.message);
+      hataGoster("Failed to leave: " + err.message);
     }
   });
 
@@ -988,20 +993,20 @@ function initDashboard(): void {
     const sc = currentServerCode;
     if (!text || !cid) return;
     if (sc) {
-      userHasPermission(sc, "send_messages").then((allowed) => {
+      yetkisiVarMi(sc, "send_messages").then((allowed) => {
         if (!allowed) {
-          showAuthError("You don't have permission to send messages");
+          hataGoster("You don't have permission to send messages");
           return;
         }
-        sendChannelMessage(cid, text).catch((err: any) => {
-          showAuthError("Failed to send: " + err.message);
+        kanalMesajGonder(cid, text).catch((err: any) => {
+          hataGoster("Failed to send: " + err.message);
         });
         if (inputEl) { inputEl.value = ""; inputEl.focus(); }
       });
       return;
     }
-    sendChannelMessage(cid, text).catch((err: any) => {
-      showAuthError("Failed to send: " + err.message);
+    kanalMesajGonder(cid, text).catch((err: any) => {
+      hataGoster("Failed to send: " + err.message);
     });
     if (inputEl) { inputEl.value = ""; inputEl.focus(); }
   };
@@ -1026,8 +1031,8 @@ function initDashboard(): void {
 
   document.getElementById("server-roles-btn")?.addEventListener("click", () => {
     serverDropdown?.classList.remove("open");
-    showModal("roles-modal");
-    renderRolesModal();
+    gosterModal("roles-modal");
+    rollerModalGoster();
   });
 
   document.getElementById("server-members-btn")?.addEventListener("click", () => {
@@ -1040,24 +1045,24 @@ function initDashboard(): void {
 
   document.getElementById("server-invites-btn")?.addEventListener("click", () => {
     serverDropdown?.classList.remove("open");
-    showModal("invites-modal");
-    renderInvitesList();
+    gosterModal("invites-modal");
+    davetListesiGoster();
   });
 
   // Roles modal
   document.getElementById("roles-modal-close")?.addEventListener("click", () => {
-    hideModal("roles-modal");
+    gizleModal("roles-modal");
   });
 
   // Create role modal
   document.getElementById("create-role-btn")?.addEventListener("click", () => {
-    hideModal("roles-modal");
-    showModal("create-role-modal");
+    gizleModal("roles-modal");
+    gosterModal("create-role-modal");
     document.getElementById("role-name-input")?.focus();
   });
 
   document.getElementById("create-role-cancel")?.addEventListener("click", () => {
-    hideModal("create-role-modal");
+    gizleModal("create-role-modal");
   });
 
   document.getElementById("create-role-confirm")?.addEventListener("click", async () => {
@@ -1083,27 +1088,27 @@ function initDashboard(): void {
         isDefault: false,
         createdAt: firebase.firestore.FieldValue.serverTimestamp(),
       });
-      hideModal("create-role-modal");
+      gizleModal("create-role-modal");
       input.value = "";
-      showModal("roles-modal");
-      renderRolesModal();
+      gosterModal("roles-modal");
+      rollerModalGoster();
     } catch (err: any) {
-      showAuthError("Failed to create role");
+      hataGoster("Failed to create role");
     }
   });
 
   // Invites modal
   document.getElementById("invites-modal-close")?.addEventListener("click", () => {
-    hideModal("invites-modal");
+    gizleModal("invites-modal");
   });
   document.getElementById("generate-invite-btn")?.addEventListener("click", async () => {
     if (!currentServerCode) return;
     try {
-      const inviteCode = await generateInviteCode(currentServerCode);
-      renderInvitesList();
-      showAuthError("Invite created: " + inviteCode, "success");
+      const inviteCode = await davetKoduOlustur(currentServerCode);
+      davetListesiGoster();
+      hataGoster("Invite created: " + inviteCode, "success");
     } catch (err: any) {
-      showAuthError("Failed to create invite");
+      hataGoster("Failed to create invite");
     }
   });
 
@@ -1111,20 +1116,20 @@ function initDashboard(): void {
   const flash = sessionStorage.getItem("flash_error");
   if (flash) {
     sessionStorage.removeItem("flash_error");
-    showAuthError(flash);
+    hataGoster(flash);
   }
 }
 
-/* ===== SERVER RENDERING ===== */
+// sunucu listesini çizdir
 
-function renderServerList(servers: any[]): void {
+function sunucuListesiGoster(servers: any[]): void {
   const serverList = document.getElementById("server-list");
   if (!serverList) return;
   serverList.innerHTML = servers.map((s) => {
     const isActive = s.code === currentServerCode;
     const initial = (s.name || "S")[0].toUpperCase();
     return `
-      <div class="server-item ${isActive ? "active" : ""}" data-code="${s.code}" title="${escapeHtml(s.name)}">
+      <div class="server-item ${isActive ? "active" : ""}" data-code="${s.code}" title="${temizle(s.name)}">
         <span class="server-initials">${initial}</span>
       </div>
     `;
@@ -1133,14 +1138,14 @@ function renderServerList(servers: any[]): void {
   serverList.querySelectorAll(".server-item").forEach((el) => {
     el.addEventListener("click", () => {
       const code = (el as HTMLElement).dataset.code;
-      if (code) selectServer(code);
+      if (code) sunucuSec(code);
     });
   });
 }
 
-/* ===== SERVER / CHANNEL SELECTION ===== */
+// server / kanal seçimi
 
-function selectServer(code: string | null): void {
+function sunucuSec(code: string | null): void {
   // Cleanup previous channel subs
   if (channelMessagesUnsub) { channelMessagesUnsub(); channelMessagesUnsub = null; }
   if (serverChannelsUnsub) { serverChannelsUnsub(); serverChannelsUnsub = null; }
@@ -1181,7 +1186,7 @@ function selectServer(code: string | null): void {
     welcomeState?.classList.add("hidden");
     chatArea?.classList.add("hidden");
     homeState?.classList.remove("hidden");
-    renderHomeRooms();
+    anaSayfaOdalari();
     return;
   }
 
@@ -1194,30 +1199,30 @@ function selectServer(code: string | null): void {
   if (serverNameEl) {
     serverNameEl.textContent = server?.name || "Server";
     if (!server) {
-      getServer(code).then((s) => {
+      sunucuGetir(code).then((s) => {
         if (s && serverNameEl) serverNameEl.textContent = s.name;
       });
     }
   }
 
   // Load channels
-  serverChannelsUnsub = loadServerChannels(code, (channels) => {
-    renderChannelList(channels, code);
+  serverChannelsUnsub = kanallariYukle(code, (channels) => {
+    kanalListesiGoster(channels, code);
     if (channels.length > 0 && !currentChannelId) {
-      selectChannel(channels[0].id, channels[0].name, code);
+      kanalSec(channels[0].id, channels[0].name, code);
     }
   });
 
   // Show/hide add channel button based on permission
-  updateAddChannelButtonVisibility(code);
+  kanalButonGuncelle(code);
 
   // Load members
-  memberListUnsub = loadServerMembers(code, (members) => {
-    renderMemberList(members, code);
+  memberListUnsub = uyeleriYukle(code, (members) => {
+    uyeListesiGoster(members, code);
   });
 }
 
-function renderMemberList(members: any[], serverCode: string): void {
+function uyeListesiGoster(members: any[], serverCode: string): void {
   if (serverCode !== currentServerCode) return;
   const container = document.getElementById("member-list");
   if (!container) return;
@@ -1230,49 +1235,49 @@ function renderMemberList(members: any[], serverCode: string): void {
   container.innerHTML = members.map((m) => {
     const initial = (m.username || "U")[0].toUpperCase();
     const avatarHtml = m.photoURL
-      ? `<img src="${escapeHtml(m.photoURL)}" alt="" class="member-avatar-img" />`
+      ? `<img src="${temizle(m.photoURL)}" alt="" class="member-avatar-img" />`
       : `<span class="member-avatar-initials">${initial}</span>`;
     const roleDot = m.roleColor
       ? `<span class="member-role-dot" style="background:${m.roleColor}"></span>`
       : "";
     return `
-      <div class="member-item" title="${escapeHtml(m.username)}">
+      <div class="member-item" title="${temizle(m.username)}">
         <div class="member-avatar">${avatarHtml}</div>
         <div class="member-info">
-          <span class="member-name">${escapeHtml(m.username)}</span>
-          <div class="member-role-row">${roleDot}${m.roleName ? `<span class="member-role-label">${escapeHtml(m.roleName)}</span>` : ""}</div>
+          <span class="member-name">${temizle(m.username)}</span>
+          <div class="member-role-row">${roleDot}${m.roleName ? `<span class="member-role-label">${temizle(m.roleName)}</span>` : ""}</div>
         </div>
       </div>
     `;
   }).join("");
 }
 
-async function updateAddChannelButtonVisibility(serverCode: string): Promise<void> {
+async function kanalButonGuncelle(serverCode: string): Promise<void> {
   const btn = document.getElementById("add-channel-btn");
   if (!btn) return;
-  const allowed = await userHasPermission(serverCode, "manage_channels");
+  const allowed = await yetkisiVarMi(serverCode, "manage_channels");
   btn.style.display = allowed ? "" : "none";
 }
 
-function renderRolesModal(): void {
+function rollerModalGoster(): void {
   if (!currentServerCode) return;
   const container = document.getElementById("roles-list");
   if (!container) return;
 
-  loadServerRoles(currentServerCode, (roles) => {
+  rolleriYukle(currentServerCode, (roles) => {
     container.innerHTML = roles.map((r) => {
       const perms = r.permissions || {};
       return `
         <div class="role-card" data-role-id="${r.id}">
           <div class="role-card-header">
-            <span class="role-name" style="color:${r.color || "#949ba4"}">${escapeHtml(r.name)}</span>
+            <span class="role-name" style="color:${r.color || "#949ba4"}">${temizle(r.name)}</span>
             <span class="role-badge" style="background:${r.color || "#949ba4"}"></span>
           </div>
           <div class="role-permissions">
             ${Object.keys(perms).map((p) => `
               <label class="role-perm-item">
                 <input type="checkbox" ${perms[p] ? "checked" : ""} data-perm="${p}" data-role-id="${r.id}" ${r.isDefault ? "disabled" : ""} />
-                <span>${escapeHtml(p.replace(/_/g, " "))}</span>
+                <span>${temizle(p.replace(/_/g, " "))}</span>
               </label>
             `).join("")}
           </div>
@@ -1291,7 +1296,7 @@ function renderRolesModal(): void {
           const roleRef = db.collection("servers").doc(currentServerCode).collection("roles").doc(roleId);
           await roleRef.update({ ["permissions." + perm]: cb.checked });
         } catch (err: any) {
-          showAuthError("Failed to update permission");
+          hataGoster("Failed to update permission");
         }
       });
     });
@@ -1303,16 +1308,16 @@ function renderRolesModal(): void {
         if (!confirm("Delete this role?")) return;
         try {
           await db.collection("servers").doc(currentServerCode).collection("roles").doc(roleId).delete();
-          renderRolesModal();
+          rollerModalGoster();
         } catch (err: any) {
-          showAuthError("Failed to delete role");
+          hataGoster("Failed to delete role");
         }
       });
     });
   });
 }
 
-function renderChannelList(channels: any[], serverCode: string): void {
+function kanalListesiGoster(channels: any[], serverCode: string): void {
   if (serverCode !== currentServerCode) return;
 
   const textChannels = channels.filter((ch) => ch.type !== "voice");
@@ -1328,9 +1333,9 @@ function renderChannelList(channels: any[], serverCode: string): void {
       textList.innerHTML = textChannels.map((ch) => {
         const isActive = ch.id === currentChannelId;
         return `
-          <div class="channel-item ${isActive ? "active" : ""}" data-channel-id="${ch.id}" data-channel-name="${escapeHtml(ch.name)}" data-channel-type="text">
+          <div class="channel-item ${isActive ? "active" : ""}" data-channel-id="${ch.id}" data-channel-name="${temizle(ch.name)}" data-channel-type="text">
             <span class="channel-hash">#</span>
-            <span class="channel-name">${escapeHtml(ch.name)}</span>
+            <span class="channel-name">${temizle(ch.name)}</span>
           </div>
         `;
       }).join("");
@@ -1338,7 +1343,7 @@ function renderChannelList(channels: any[], serverCode: string): void {
         el.addEventListener("click", () => {
           const id = (el as HTMLElement).dataset.channelId;
           const name = (el as HTMLElement).dataset.channelName;
-          if (id && name) selectChannel(id, name, serverCode);
+          if (id && name) kanalSec(id, name, serverCode);
         });
       });
     }
@@ -1351,9 +1356,9 @@ function renderChannelList(channels: any[], serverCode: string): void {
       voiceList.innerHTML = voiceChannels.map((ch) => {
         const isVoiceActive = typeof ParaVoice !== "undefined" && ParaVoice.isActive() && ParaVoice.getActiveChannelId() === ch.id;
         return `
-          <div class="channel-item channel-voice ${isVoiceActive ? "active" : ""}" data-channel-id="${ch.id}" data-channel-name="${escapeHtml(ch.name)}" data-channel-type="voice">
+          <div class="channel-item channel-voice ${isVoiceActive ? "active" : ""}" data-channel-id="${ch.id}" data-channel-name="${temizle(ch.name)}" data-channel-type="voice">
             <span class="channel-hash">🔊</span>
-            <span class="channel-name">${escapeHtml(ch.name)}</span>
+            <span class="channel-name">${temizle(ch.name)}</span>
           </div>
         `;
       }).join("");
@@ -1372,7 +1377,7 @@ function renderChannelList(channels: any[], serverCode: string): void {
   }
 }
 
-function selectChannel(channelId: string, channelName: string, serverCode: string): void {
+function kanalSec(channelId: string, channelName: string, serverCode: string): void {
   if (serverCode !== currentServerCode) return;
   if (channelMessagesUnsub) { channelMessagesUnsub(); channelMessagesUnsub = null; }
 
@@ -1417,7 +1422,7 @@ function selectChannel(channelId: string, channelName: string, serverCode: strin
     if (inputEl) inputEl.placeholder = "Message #" + channelName;
     if (messagesEl) messagesEl.innerHTML = '<div class="chat-loading">Loading messages...</div>';
 
-    channelMessagesUnsub = loadChannelMessages(channelId, (messages) => {
+    channelMessagesUnsub = kanalMesajlariYukle(channelId, (messages) => {
       if (!messagesEl) return;
       if (messages.length === 0) {
         messagesEl.innerHTML = '<div class="chat-empty">No messages yet. Start the conversation!</div>';
@@ -1429,10 +1434,10 @@ function selectChannel(channelId: string, channelName: string, serverCode: strin
           return `
             <div class="message ${m.senderId === auth.currentUser?.uid ? "message-own" : ""}">
               <div class="message-header">
-                <span class="message-sender">${escapeHtml(m.senderName)}</span>
+                <span class="message-sender">${temizle(m.senderName)}</span>
                 <span class="message-time">${time}</span>
               </div>
-              <div class="message-text">${escapeHtml(m.text)}</div>
+              <div class="message-text">${temizle(m.text)}</div>
             </div>
           `;
         }).join("");
@@ -1444,24 +1449,24 @@ function selectChannel(channelId: string, channelName: string, serverCode: strin
 
 const inputEl = document.getElementById("server-message-input") as HTMLInputElement | null;
 
-/* ===== HOME ROOMS (old room system) ===== */
+// eski oda sistemi (anasayfa)
 
 let homeRoomsUnsub: (() => void) | null = null;
 
-function renderHomeRooms(): void {
+function anaSayfaOdalari(): void {
   const container = document.getElementById("home-rooms");
   if (!container) return;
   if (homeRoomsUnsub) {
     homeRoomsUnsub();
     homeRoomsUnsub = null;
   }
-  homeRoomsUnsub = loadUserRooms((rooms) => {
+  homeRoomsUnsub = kullaniciOdalari((rooms) => {
     if (rooms.length === 0) {
       container.innerHTML = '<p style="color: var(--text-muted); text-align: center;">You\'re not in any servers yet. Create one or join with a code!</p>';
     } else {
       container.innerHTML = rooms.map((r) => `
         <a href="/chat.html?code=${r.code}" class="home-room-item">
-          <span class="home-room-code">${escapeHtml(r.code)}</span>
+          <span class="home-room-code">${temizle(r.code)}</span>
           <span>${r.createdAt?.toDate?.()?.toLocaleDateString() || ""}</span>
         </a>
       `).join("");
@@ -1469,21 +1474,21 @@ function renderHomeRooms(): void {
   });
 }
 
-/* ===== MODAL HELPERS ===== */
+// modal aç/kapa
 
-function showModal(id: string): void {
+function gosterModal(id: string): void {
   const el = document.getElementById(id);
   if (el) el.classList.remove("hidden");
 }
 
-function hideModal(id: string): void {
+function gizleModal(id: string): void {
   const el = document.getElementById(id);
   if (el) el.classList.add("hidden");
 }
 
-/* ===== CLEANUP ===== */
+// abonelikleri temizle
 
-function cleanupSubs(): void {
+function abonelikleriTemizle(): void {
   if (dashboardUnsub) { dashboardUnsub(); dashboardUnsub = null; }
   if (serverChannelsUnsub) { serverChannelsUnsub(); serverChannelsUnsub = null; }
   if (channelMessagesUnsub) { channelMessagesUnsub(); channelMessagesUnsub = null; }
@@ -1491,20 +1496,20 @@ function cleanupSubs(): void {
   if (memberListUnsub) { memberListUnsub(); memberListUnsub = null; }
 }
 
-function promptRoomPassword(code: string, correctPassword: string): void {}
+function odaSifreSor(code: string, correctPassword: string): void {}
 
-/* ===== CHAT ===== */
+// chat.html
 
 let chatUnsub: (() => void) | null = null;
 let currentRoomCode: string | null = null;
 
-function escapeHtml(text: string): string {
+function temizle(text: string): string {
   const div = document.createElement("div");
   div.textContent = text;
   return div.innerHTML;
 }
 
-function initChat(): void {
+function sohbetiBaslat(): void {
   const params = new URLSearchParams(window.location.search);
   const roomCode = params.get("code");
 
@@ -1522,7 +1527,7 @@ function initChat(): void {
 
   if (headerEl) headerEl.textContent = roomCode;
 
-  getRoom(roomCode).then(async (room) => {
+  odaGetir(roomCode).then(async (room) => {
     if (!room) {
       if (messagesEl) messagesEl.innerHTML = '<div class="chat-error">Room not found. <a href="/dashboard.html">Go back</a></div>';
       return;
@@ -1535,7 +1540,7 @@ function initChat(): void {
         return;
       }
       if (room.passwordHash) {
-        const inputHash = await hashPassword(storedPass);
+        const inputHash = await sifreHashle(storedPass);
         if (inputHash !== room.passwordHash) {
           sessionStorage.setItem("flash_error", "Incorrect password");
           window.location.href = "/dashboard.html";
@@ -1548,7 +1553,7 @@ function initChat(): void {
       }
     }
 
-    chatUnsub = loadMessages(roomCode, (messages) => {
+    chatUnsub = mesajlariYukle(roomCode, (messages) => {
       if (!messagesEl) return;
       const wasEmpty = messagesEl.querySelector(".chat-empty, .chat-loading") !== null;
       if (messages.length === 0) {
@@ -1560,10 +1565,10 @@ function initChat(): void {
           return `
             <div class="message ${m.senderId === auth.currentUser?.uid ? "message-own" : ""}">
               <div class="message-header">
-                <span class="message-sender">${escapeHtml(m.senderName)}</span>
+                <span class="message-sender">${temizle(m.senderName)}</span>
                 <span class="message-time">${time}</span>
               </div>
-              <div class="message-text">${escapeHtml(m.text)}</div>
+              <div class="message-text">${temizle(m.text)}</div>
             </div>
           `;
         }).join("");
@@ -1574,8 +1579,8 @@ function initChat(): void {
 
   const send = () => {
     if (!inputEl?.value.trim()) return;
-    sendMessage(roomCode, inputEl.value).catch((err: any) => {
-      showAuthError("Failed to send: " + err.message);
+    mesajGonder(roomCode, inputEl.value).catch((err: any) => {
+      hataGoster("Failed to send: " + err.message);
     });
     inputEl.value = "";
     inputEl.focus();
@@ -1591,9 +1596,9 @@ function initChat(): void {
   });
 }
 
-/* ===== AUTH STATE LISTENER ===== */
+// oturum dinleyici
 
-function initAuthStateListener(currentPage: string): void {
+function oturumDinle(currentPage: string): void {
   auth.onAuthStateChanged((user: any) => {
     if (!user) {
       if (currentPage === "dashboard.html" || currentPage === "chat.html") {
@@ -1612,11 +1617,11 @@ function initAuthStateListener(currentPage: string): void {
       return;
     }
 
-    updateNavbar(user);
+    navBarGuncelle(user);
   });
 }
 
-function updateNavbar(user: any): void {
+function navBarGuncelle(user: any): void {
   const loginLinks = document.querySelectorAll('[href="login.html"], [href="signup.html"]');
   const navbarLinks = document.querySelector(".navbar-links");
   const heroButtons = document.querySelector(".hero-buttons");
@@ -1639,7 +1644,7 @@ function updateNavbar(user: any): void {
       avatar.className = "nav-avatar";
       avatar.alt = user.displayName || "User";
       avatar.onerror = () => { avatar.style.display = "none"; };
-      loadProfile(user.uid).then(p => {
+      profilGetir(user.uid).then(p => {
         if (p.photoURL) avatar.src = p.photoURL;
       });
 
@@ -1669,7 +1674,7 @@ function updateNavbar(user: any): void {
       document.addEventListener("click", () => dropdown.classList.remove("open"));
 
       document.getElementById("dropdown-logout")?.addEventListener("click", async () => {
-        cleanupSubs();
+        abonelikleriTemizle();
         await auth.signOut();
         window.location.href = "/";
       });
@@ -1686,11 +1691,12 @@ function updateNavbar(user: any): void {
   }
 }
 
-/* ===== UI UTILITIES ===== */
+// ufak tefek yardımcılar
 
-function showAuthError(message: string, type?: string): void {
+function hataGoster(message: string, type?: string): void {
   if (!message) return;
-  if (typeof Para !== "undefined") Para.capture(message, { type: "ui", context: "showAuthError" });
+  // hata mesajlarını da logluyoruz, ileride işe yarayabilir
+  if (typeof Para !== "undefined") Para.capture(message, { type: "ui", context: "hataGoster" });
   const errorEl = document.createElement("div");
   errorEl.className = "auth-error" + (type === "success" ? " auth-success" : "");
   errorEl.textContent = message;
@@ -1698,9 +1704,9 @@ function showAuthError(message: string, type?: string): void {
   setTimeout(() => errorEl.remove(), 5000);
 }
 
-/* ===== PASSWORD VISIBILITY TOGGLE ===== */
+// şifre göster/gizle butonu
 
-function initPasswordToggles(): void {
+function sifreGosterGizle(): void {
   const toggles = document.querySelectorAll<HTMLElement>(".password-toggle");
   toggles.forEach((toggle) => {
     toggle.addEventListener("click", () => {
@@ -1719,9 +1725,9 @@ function initPasswordToggles(): void {
   });
 }
 
-/* ===== FORM UTILITIES ===== */
+// form doğrulama yardımcıları
 
-function setError(input: HTMLInputElement, message: string): void {
+function hataAyarla(input: HTMLInputElement, message: string): void {
   input.classList.add("error");
   input.classList.remove("valid");
   const errorEl = input.closest(".form-group")?.querySelector<HTMLElement>(".error-message");
@@ -1731,7 +1737,7 @@ function setError(input: HTMLInputElement, message: string): void {
   }
 }
 
-function setValid(input: HTMLInputElement): void {
+function dogruAyarla(input: HTMLInputElement): void {
   input.classList.remove("error");
   input.classList.add("valid");
   const errorEl = input.closest(".form-group")?.querySelector<HTMLElement>(".error-message");
@@ -1740,7 +1746,7 @@ function setValid(input: HTMLInputElement): void {
   }
 }
 
-function clearStatus(input: HTMLInputElement): void {
+function temizleDurum(input: HTMLInputElement): void {
   input.classList.remove("error", "valid");
   const errorEl = input.closest(".form-group")?.querySelector<HTMLElement>(".error-message");
   if (errorEl) {
@@ -1748,15 +1754,15 @@ function clearStatus(input: HTMLInputElement): void {
   }
 }
 
-function validateEmail(email: string): boolean {
+function mailKontrol(email: string): boolean {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 }
 
-function validateUsername(username: string): boolean {
+function kullaniciAdiKontrol(username: string): boolean {
   return username.length >= 3 && username.length <= 32;
 }
 
-function validatePassword(password: string): boolean {
+function sifreKontrol(password: string): boolean {
   return password.length >= 8
     && /[A-Z]/.test(password)
     && /[a-z]/.test(password)
@@ -1764,13 +1770,13 @@ function validatePassword(password: string): boolean {
     && /[^A-Za-z0-9]/.test(password);
 }
 
-function passwordsMatch(a: string, b: string): boolean {
+function sifrelerEslesiyor(a: string, b: string): boolean {
   return a === b;
 }
 
-/* ===== SIGNUP ===== */
+// kayıt formu
 
-function initSignupValidation(): void {
+function kayitKontrol(): void {
   const form = document.getElementById("signup-form") as HTMLFormElement | null;
   if (!form) return;
 
@@ -1783,11 +1789,11 @@ function initSignupValidation(): void {
   if (googleBtn) {
     googleBtn.addEventListener("click", async () => {
       try {
-        await handleGoogleAuth();
+        await googleIleGir();
         window.location.href = "/dashboard.html";
       } catch (error: any) {
-        const msg = handleAuthError(error);
-        if (msg) showAuthError(msg);
+        const msg = authHatasi(error);
+        if (msg) hataGoster(msg);
       }
     });
   }
@@ -1796,42 +1802,42 @@ function initSignupValidation(): void {
     usernameInput.addEventListener("blur", () => {
       const val = usernameInput.value.trim();
       if (!val) {
-        setError(usernameInput, "Username is required.");
-      } else if (!validateUsername(val)) {
-        setError(usernameInput, "Must be between 3 and 32 characters.");
+        hataAyarla(usernameInput, "Username is required.");
+      } else if (!kullaniciAdiKontrol(val)) {
+        hataAyarla(usernameInput, "Must be between 3 and 32 characters.");
       } else {
-        setValid(usernameInput);
+        dogruAyarla(usernameInput);
       }
     });
-    usernameInput.addEventListener("input", () => clearStatus(usernameInput));
+    usernameInput.addEventListener("input", () => temizleDurum(usernameInput));
   }
 
   if (emailInput) {
     emailInput.addEventListener("blur", () => {
       const val = emailInput.value.trim();
       if (!val) {
-        setError(emailInput, "Email is required.");
-      } else if (!validateEmail(val)) {
-        setError(emailInput, "Please enter a valid email address.");
+        hataAyarla(emailInput, "Email is required.");
+      } else if (!mailKontrol(val)) {
+        hataAyarla(emailInput, "Please enter a valid email address.");
       } else {
-        setValid(emailInput);
+        dogruAyarla(emailInput);
       }
     });
-    emailInput.addEventListener("input", () => clearStatus(emailInput));
+    emailInput.addEventListener("input", () => temizleDurum(emailInput));
   }
 
   if (passwordInput) {
     passwordInput.addEventListener("blur", () => {
       const val = passwordInput.value;
       if (!val) {
-        setError(passwordInput, "Password is required.");
-      } else if (!validatePassword(val)) {
-        setError(passwordInput, "Must be at least 8 characters with uppercase, lowercase, number, and special character.");
+        hataAyarla(passwordInput, "Password is required.");
+      } else if (!sifreKontrol(val)) {
+        hataAyarla(passwordInput, "Must be at least 8 characters with uppercase, lowercase, number, and special character.");
       } else {
-        setValid(passwordInput);
+        dogruAyarla(passwordInput);
       }
     });
-    passwordInput.addEventListener("input", () => clearStatus(passwordInput));
+    passwordInput.addEventListener("input", () => temizleDurum(passwordInput));
   }
 
   if (confirmInput) {
@@ -1839,14 +1845,14 @@ function initSignupValidation(): void {
       const val = confirmInput.value;
       const password = passwordInput?.value ?? "";
       if (!val) {
-        setError(confirmInput, "Please confirm your password.");
-      } else if (!passwordsMatch(val, password)) {
-        setError(confirmInput, "Passwords do not match.");
+        hataAyarla(confirmInput, "Please confirm your password.");
+      } else if (!sifrelerEslesiyor(val, password)) {
+        hataAyarla(confirmInput, "Passwords do not match.");
       } else {
-        setValid(confirmInput);
+        dogruAyarla(confirmInput);
       }
     });
-    confirmInput.addEventListener("input", () => clearStatus(confirmInput));
+    confirmInput.addEventListener("input", () => temizleDurum(confirmInput));
   }
 
   form.addEventListener("submit", async (e) => {
@@ -1856,66 +1862,66 @@ function initSignupValidation(): void {
 
     if (usernameInput) {
       const val = usernameInput.value.trim();
-      if (!val || !validateUsername(val)) {
-        setError(usernameInput, !val ? "Username is required." : "Must be between 3 and 32 characters.");
+      if (!val || !kullaniciAdiKontrol(val)) {
+        hataAyarla(usernameInput, !val ? "Username is required." : "Must be between 3 and 32 characters.");
         valid = false;
       } else {
-        setValid(usernameInput);
+        dogruAyarla(usernameInput);
       }
     }
 
     if (emailInput) {
       const val = emailInput.value.trim();
-      if (!val || !validateEmail(val)) {
-        setError(emailInput, !val ? "Email is required." : "Please enter a valid email address.");
+      if (!val || !mailKontrol(val)) {
+        hataAyarla(emailInput, !val ? "Email is required." : "Please enter a valid email address.");
         valid = false;
       } else {
-        setValid(emailInput);
+        dogruAyarla(emailInput);
       }
     }
 
     if (passwordInput) {
       const val = passwordInput.value;
-      if (!val || !validatePassword(val)) {
-        setError(passwordInput, !val ? "Password is required." : "Must be at least 8 characters with uppercase, lowercase, number, and special character.");
+      if (!val || !sifreKontrol(val)) {
+        hataAyarla(passwordInput, !val ? "Password is required." : "Must be at least 8 characters with uppercase, lowercase, number, and special character.");
         valid = false;
       } else {
-        setValid(passwordInput);
+        dogruAyarla(passwordInput);
       }
     }
 
     if (confirmInput) {
       const val = confirmInput.value;
       const password = passwordInput?.value ?? "";
-      if (!val || !passwordsMatch(val, password)) {
-        setError(confirmInput, !val ? "Please confirm your password." : "Passwords do not match.");
+      if (!val || !sifrelerEslesiyor(val, password)) {
+        hataAyarla(confirmInput, !val ? "Please confirm your password." : "Passwords do not match.");
         valid = false;
       } else {
-        setValid(confirmInput);
+        dogruAyarla(confirmInput);
       }
     }
 
     if (valid && usernameInput && emailInput && passwordInput) {
       try {
         const rememberCheckbox = form.querySelector<HTMLInputElement>('input[name="remember"]');
-        setPersistence(rememberCheckbox?.checked ?? false);
-        await handleSignup(
+        kalicilikAyarla(rememberCheckbox?.checked ?? false);
+        await yeniKayit(
           usernameInput.value.trim(),
           emailInput.value.trim(),
           passwordInput.value
         );
         window.location.href = "/dashboard.html";
       } catch (error: any) {
-        const msg = handleAuthError(error);
-        if (msg) showAuthError(msg);
+        const msg = authHatasi(error);
+        if (msg) hataGoster(msg);
       }
     }
   });
 }
 
-/* ===== LOGIN ===== */
+// giriş formu
 
-function initLoginValidation(): void {
+function girisKontrol(): void {
   const form = document.getElementById("login-form") as HTMLFormElement | null;
   if (!form) return;
 
@@ -1926,11 +1932,11 @@ function initLoginValidation(): void {
   if (googleBtn) {
     googleBtn.addEventListener("click", async () => {
       try {
-        await handleGoogleAuth();
+        await googleIleGir();
         window.location.href = "/dashboard.html";
       } catch (error: any) {
-        const msg = handleAuthError(error);
-        if (msg) showAuthError(msg);
+        const msg = authHatasi(error);
+        if (msg) hataGoster(msg);
       }
     });
   }
@@ -1939,25 +1945,25 @@ function initLoginValidation(): void {
     emailInput.addEventListener("blur", () => {
       const val = emailInput.value.trim();
       if (!val) {
-        setError(emailInput, "Email is required.");
-      } else if (!validateEmail(val)) {
-        setError(emailInput, "Please enter a valid email address.");
+        hataAyarla(emailInput, "Email is required.");
+      } else if (!mailKontrol(val)) {
+        hataAyarla(emailInput, "Please enter a valid email address.");
       } else {
-        setValid(emailInput);
+        dogruAyarla(emailInput);
       }
     });
-    emailInput.addEventListener("input", () => clearStatus(emailInput));
+    emailInput.addEventListener("input", () => temizleDurum(emailInput));
   }
 
   if (passwordInput) {
     passwordInput.addEventListener("blur", () => {
       if (!passwordInput.value) {
-        setError(passwordInput, "Password is required.");
+        hataAyarla(passwordInput, "Password is required.");
       } else {
-        setValid(passwordInput);
+        dogruAyarla(passwordInput);
       }
     });
-    passwordInput.addEventListener("input", () => clearStatus(passwordInput));
+    passwordInput.addEventListener("input", () => temizleDurum(passwordInput));
   }
 
   form.addEventListener("submit", async (e) => {
@@ -1967,32 +1973,32 @@ function initLoginValidation(): void {
 
     if (emailInput) {
       const val = emailInput.value.trim();
-      if (!val || !validateEmail(val)) {
-        setError(emailInput, !val ? "Email is required." : "Please enter a valid email address.");
+      if (!val || !mailKontrol(val)) {
+        hataAyarla(emailInput, !val ? "Email is required." : "Please enter a valid email address.");
         valid = false;
       } else {
-        setValid(emailInput);
+        dogruAyarla(emailInput);
       }
     }
 
     if (passwordInput) {
       if (!passwordInput.value) {
-        setError(passwordInput, "Password is required.");
+        hataAyarla(passwordInput, "Password is required.");
         valid = false;
       } else {
-        setValid(passwordInput);
+        dogruAyarla(passwordInput);
       }
     }
 
     if (valid && emailInput && passwordInput) {
       try {
         const rememberCheckbox = form.querySelector<HTMLInputElement>('input[name="remember"]');
-        setPersistence(rememberCheckbox?.checked ?? false);
-        await handleLogin(emailInput.value.trim(), passwordInput.value);
+        kalicilikAyarla(rememberCheckbox?.checked ?? false);
+        await girisYap(emailInput.value.trim(), passwordInput.value);
         window.location.href = "/dashboard.html";
       } catch (error: any) {
-        const msg = handleAuthError(error);
-        if (msg) showAuthError(msg);
+        const msg = authHatasi(error);
+        if (msg) hataGoster(msg);
       }
     }
   });
