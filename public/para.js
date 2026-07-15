@@ -156,5 +156,4 @@
   };
 
   window.Para = Para;
-  Para.init();
 })();

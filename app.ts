@@ -18,6 +18,8 @@ const auth = firebase.auth();
 const db = firebase.firestore();
 db.settings({ merge: true });
 
+if (typeof Para !== "undefined") Para.init();
+
 // Electron'daki yönlendirme sonucunu yakala (google sign-in)
 async function yonlendirmeSonuc() {
   try {

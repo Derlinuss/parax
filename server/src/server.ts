@@ -44,10 +44,10 @@ app.use((_req, res, next) => {
   res.setHeader("Strict-Transport-Security", "max-age=31536000; includeSubDomains; preload");
   res.setHeader("Content-Security-Policy", [
     "default-src 'self'",
-    "script-src 'self' https://www.gstatic.com https://unpkg.com 'unsafe-inline'",
+    "script-src 'self' https://www.gstatic.com https://unpkg.com https://apis.google.com 'unsafe-inline'",
     "style-src 'self' 'unsafe-inline'",
-    "connect-src 'self' https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://firestore.googleapis.com https://webappparax.firebasestorage.app https://api.daily.co wss://*.daily.co",
-    "frame-src 'self' https://*.daily.co",
+    "connect-src 'self' https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://firestore.googleapis.com https://webappparax.firebasestorage.app https://api.daily.co wss://*.daily.co https://*.gstatic.com",
+    "frame-src 'self' https://*.daily.co https://*.firebaseapp.com",
     "img-src 'self' https://webappparax.firebasestorage.app data: blob:",
     "font-src 'self' data:",
     "media-src 'self'",

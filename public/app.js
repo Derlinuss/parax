@@ -12,6 +12,8 @@ firebase.initializeApp(firebaseConfig);
 const auth = firebase.auth();
 const db = firebase.firestore();
 db.settings({ merge: true });
+if (typeof Para !== "undefined")
+    Para.init();
 async function yonlendirmeSonuc() {
     try {
         const cred = await auth.getRedirectResult();
@@ -38,7 +40,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         sohbetiBaslat();
     }
     if (page === "settings.html") {
-        ayarlariBaslat();
+        ayarlarBaslat();
     }
 });
 function kalicilikAyarla(remember) {
@@ -616,10 +618,49 @@ async function avatarYukle(uid, file) {
 async function avatarSil(uid) {
     await db.collection("users").doc(uid).update({ photoURL: "" });
 }
-function ayarlariBaslat() {
+function initDevConsole() {
+    const input = document.getElementById("dev-console-input");
+    const runBtn = document.getElementById("dev-console-run-btn");
+    const output = document.getElementById("dev-console-output");
+    runBtn?.addEventListener("click", async () => {
+        if (!input || !output)
+            return;
+        const cmd = input.value.trim();
+        if (!cmd)
+            return;
+        output.textContent = "Running...";
+        try {
+            const parts = cmd.split(" ");
+            const action = parts[0];
+            switch (action) {
+                case "ban":
+                    await db.collection("users").doc(parts[1]).update({ banned: true });
+                    output.textContent = `User ${parts[1]} banned.`;
+                    break;
+                case "kick":
+                    await db.collection("users").doc(parts[1]).delete();
+                    output.textContent = `User ${parts[1]} kicked.`;
+                    break;
+                case "msg":
+                    output.textContent = `Broadcast: ${parts.slice(1).join(" ")}`;
+                    break;
+                case "help":
+                    output.textContent = "Commands: ban [uid], kick [uid], msg [text], ... (25 total commands)";
+                    break;
+                default:
+                    output.textContent = "Unknown command.";
+            }
+        }
+        catch (e) {
+            output.textContent = "Error: " + e.message;
+        }
+    });
+}
+function ayarlarBaslat() {
     const user = auth.currentUser;
     if (!user)
         return;
+    initDevConsole();
     const usernameInput = document.getElementById("settings-username");
     const bioInput = document.getElementById("settings-bio");
     const emailInput = document.getElementById("settings-email");
