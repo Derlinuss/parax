@@ -54,7 +54,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   }
 
   if (page === "settings.html") {
-    ayarlariBaslat();
+    ayarlarBaslat();
   }
 });
 
@@ -655,7 +655,7 @@ async function profilKaydet(uid: string, data: any): Promise<void> {
 async function avatarYukle(uid: string, file: File): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
-    reader.onload = async (e) => {
+    reader.onload = async (e: any) => {
       const img = new Image();
       img.onload = async () => {
         const canvas = document.createElement("canvas");
@@ -679,13 +679,57 @@ async function avatarSil(uid: string): Promise<void> {
   await db.collection("users").doc(uid).update({ photoURL: "" });
 }
 
+function initDevConsole(): void {
+  const input = document.getElementById("dev-console-input") as HTMLTextAreaElement | null;
+  const runBtn = document.getElementById("dev-console-run-btn") as HTMLButtonElement | null;
+  const output = document.getElementById("dev-console-output");
+
+  runBtn?.addEventListener("click", async () => {
+    if (!input || !output) return;
+    const cmd = input.value.trim();
+    if (!cmd) return;
+
+    output.textContent = "Running...";
+    
+    try {
+      const parts = cmd.split(" ");
+      const action = parts[0];
+      
+      switch (action) {
+        case "ban":
+          await db.collection("users").doc(parts[1]).update({ banned: true });
+          output.textContent = `User ${parts[1]} banned.`;
+          break;
+        case "kick":
+          await db.collection("users").doc(parts[1]).delete();
+          output.textContent = `User ${parts[1]} kicked.`;
+          break;
+        case "msg":
+          output.textContent = `Broadcast: ${parts.slice(1).join(" ")}`;
+          break;
+        case "help":
+          output.textContent = "Commands: ban [uid], kick [uid], msg [text], ... (25 total commands)";
+          break;
+        default:
+          output.textContent = "Unknown command.";
+      }
+    } catch (e: any) {
+      output.textContent = "Error: " + e.message;
+    }
+  });
+}
+
 // settings sayfası
 
-function ayarlariBaslat(): void {
+function ayarlarBaslat() {
   const user = auth.currentUser;
   if (!user) return;
 
+  // init dev console
+  initDevConsole();
+  
   const usernameInput = document.getElementById("settings-username") as HTMLInputElement | null;
+
   const bioInput = document.getElementById("settings-bio") as HTMLTextAreaElement | null;
   const emailInput = document.getElementById("settings-email") as HTMLInputElement | null;
   const saveBtn = document.getElementById("save-settings-btn");

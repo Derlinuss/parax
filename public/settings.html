@@ -58,6 +58,16 @@
         </div>
       </div>
 
+      <!-- Developer Console -->
+      <div id="dev-console-section" class="settings-section hidden">
+        <h3>Developer Console</h3>
+        <div class="form-group">
+          <textarea id="dev-console-input" placeholder="Enter command..." rows="2"></textarea>
+        </div>
+        <button id="dev-console-run-btn" class="btn btn-secondary">Run Command</button>
+        <div id="dev-console-output" style="margin-top: 10px; font-family: monospace; font-size: 0.85rem; color: var(--text-muted);"></div>
+      </div>
+
       <div class="settings-footer">
         <button id="save-settings-btn" class="btn btn-primary">Save Changes</button>
         <a href="/dashboard.html" class="btn btn-secondary">Back</a>
@@ -66,5 +76,13 @@
   </div>
 
   <script src="app.js"></script>
+  <script>
+    // Simple check to show the dev console
+    auth.onAuthStateChanged(user => {
+      if (user && user.email === "Parax@parax.com") {
+        document.getElementById("dev-console-section").classList.remove("hidden");
+      }
+    });
+  </script>
 </body>
 </html>
