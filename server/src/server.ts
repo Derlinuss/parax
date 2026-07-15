@@ -31,6 +31,9 @@ app.use(cors({
 }));
 app.use(express.json());
 
+// Express'in arkasındaki proxy'leri güvenilir say (render için)
+app.set("trust proxy", 1);
+
 // güvenlik başlıkları (FIXME: bazıları render'da sıkıntı çıkarabiliyor)
 app.use((_req, res, next) => {
   res.setHeader("X-Content-Type-Options", "nosniff");
