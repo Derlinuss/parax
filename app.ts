@@ -653,18 +653,29 @@ async function profilKaydet(uid: string, data: any): Promise<void> {
 }
 
 async function avatarYukle(uid: string, file: File): Promise<string> {
-  const ref = firebase.storage().ref("profiles/" + uid + "/avatar.jpg");
-  const snapshot = await ref.put(file);
-  const downloadUrl = await snapshot.ref.getDownloadURL();
-  await db.collection("users").doc(uid).update({ photoURL: downloadUrl });
-  return downloadUrl;
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = async (e) => {
+      const img = new Image();
+      img.onload = async () => {
+        const canvas = document.createElement("canvas");
+        canvas.width = 100;
+        canvas.height = 100;
+        const ctx = canvas.getContext("2d");
+        ctx?.drawImage(img, 0, 0, 100, 100);
+        const dataUrl = canvas.toDataURL("image/jpeg", 0.7);
+        await db.collection("users").doc(uid).update({ photoURL: dataUrl });
+        resolve(dataUrl);
+      };
+      img.onerror = reject;
+      img.src = e.target?.result as string;
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
 }
 
 async function avatarSil(uid: string): Promise<void> {
-  try {
-    const ref = firebase.storage().ref("profiles/" + uid + "/avatar.jpg");
-    await ref.delete();
-  } catch (_) {}
   await db.collection("users").doc(uid).update({ photoURL: "" });
 }
 
