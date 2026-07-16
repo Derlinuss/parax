@@ -1438,26 +1438,19 @@ function kanalListesiGoster(channels: any[], serverCode: string): void {
               ParaVoice.join(id, name);
 }
 
-// ----- arkadaşlık sistemi (backend integration) -----
+// ----- mesaj işlemleri (backend) -----
 
-async function arkadasIstegiGonder(hedefUserId: string) {
-    const user = auth.currentUser;
-    if (!user) return;
-    await db.collection("friends").add({
-        uid1: user.uid < hedefUserId ? user.uid : hedefUserId,
-        uid2: user.uid < hedefUserId ? hedefUserId : user.uid,
-        status: "pending",
-        senderId: user.uid,
-        createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+async function mesajSil(messageId: string) {
+    await db.collection("messages").doc(messageId).delete();
+}
+
+async function mesajDuzenle(messageId: string, newText: string) {
+    await db.collection("messages").doc(messageId).update({
+        text: newText,
+        editedAt: firebase.firestore.FieldValue.serverTimestamp(),
     });
 }
 
-async function arkadasIstegiKabulEt(requestId: string) {
-    await db.collection("friends").doc(requestId).update({
-        status: "accepted",
-        acceptedAt: firebase.firestore.FieldValue.serverTimestamp(),
-    });
-}
           }
         });
       });
@@ -1517,18 +1510,25 @@ function kanalSec(channelId: string, channelName: string, serverCode: string): v
       } else {
         const wasEmpty = messagesEl.querySelector(".chat-empty, .chat-loading") !== null;
         const isAtBottom = wasEmpty || messagesEl.scrollHeight - messagesEl.scrollTop - messagesEl.clientHeight < 100;
-        messagesEl.innerHTML = messages.map((m) => {
-          const time = m.createdAt?.toDate?.()?.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) || "";
-          return `
-            <div class="message ${m.senderId === auth.currentUser?.uid ? "message-own" : ""}">
-              <div class="message-header">
-                <span class="message-sender">${temizle(m.senderName)}</span>
-                <span class="message-time">${time}</span>
-              </div>
-              <div class="message-text">${temizle(m.text)}</div>
-            </div>
-          `;
-        }).join("");
+         messagesEl.innerHTML = messages.map((m) => {
+           const time = m.createdAt?.toDate?.()?.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) || "";
+           const isOwn = m.senderId === auth.currentUser?.uid;
+           return `
+             <div class="message ${isOwn ? "message-own" : ""}" data-message-id="${m.id}">
+               <div class="message-header">
+                 <span class="message-sender">${temizle(m.senderName)}</span>
+                 <span class="message-time">${time}</span>
+               </div>
+               <div class="message-text">${temizle(m.text)}</div>
+               ${isOwn ? `
+                 <div class="message-actions">
+                   <button class="msg-btn edit" onclick="startEdit('${m.id}')">Edit</button>
+                   <button class="msg-btn delete" onclick="confirmDelete('${m.id}')">Delete</button>
+                 </div>
+               ` : ''}
+             </div>
+           `;
+         }).join("");
         if (isAtBottom) messagesEl.scrollTop = messagesEl.scrollHeight;
       }
     });
@@ -1648,18 +1648,25 @@ function sohbetiBaslat(): void {
         messagesEl.innerHTML = '<div class="chat-empty">No messages yet. Say hello!</div>';
       } else {
         const isAtBottom = wasEmpty || messagesEl.scrollHeight - messagesEl.scrollTop - messagesEl.clientHeight < 100;
-        messagesEl.innerHTML = messages.map(m => {
-          const time = m.createdAt?.toDate?.()?.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) || "";
-          return `
-            <div class="message ${m.senderId === auth.currentUser?.uid ? "message-own" : ""}">
-              <div class="message-header">
-                <span class="message-sender">${temizle(m.senderName)}</span>
-                <span class="message-time">${time}</span>
-              </div>
-              <div class="message-text">${temizle(m.text)}</div>
-            </div>
-          `;
-        }).join("");
+         messagesEl.innerHTML = messages.map(m => {
+           const time = m.createdAt?.toDate?.()?.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) || "";
+           const isOwn = m.senderId === auth.currentUser?.uid;
+           return `
+             <div class="message ${isOwn ? "message-own" : ""}" data-message-id="${m.id}">
+               <div class="message-header">
+                 <span class="message-sender">${temizle(m.senderName)}</span>
+                 <span class="message-time">${time}</span>
+               </div>
+               <div class="message-text">${temizle(m.text)}</div>
+               ${isOwn ? `
+                 <div class="message-actions">
+                   <button class="msg-btn edit" onclick="startEdit('${m.id}')">Edit</button>
+                   <button class="msg-btn delete" onclick="confirmDelete('${m.id}')">Delete</button>
+                 </div>
+               ` : ''}
+             </div>
+           `;
+         }).join("");
         if (isAtBottom) messagesEl.scrollTop = messagesEl.scrollHeight;
       }
     });
@@ -2140,3 +2147,44 @@ function girisKontrol(): void {
     }
   });
 }
+
+// ----- mesaj işlemleri (backend) -----
+
+async function mesajSil(messageId: string) {
+    await db.collection("messages").doc(messageId).delete();
+}
+
+async function mesajDuzenle(messageId: string, newText: string) {
+    await db.collection("messages").doc(messageId).update({
+        text: newText,
+        editedAt: firebase.firestore.FieldValue.serverTimestamp(),
+    });
+}
+
+(window as any).startEdit = (id: string) => {
+    const messageEl = document.querySelector(`.message[data-message-id="${id}"]`);
+    const textEl = messageEl?.querySelector(".message-text");
+    if (!textEl) return;
+    const oldText = textEl.textContent;
+    const newText = prompt("Edit message:", oldText || "");
+    if (newText !== null && newText !== oldText) {
+        mesajDuzenle(id, newText);
+    }
+};
+
+(window as any).confirmDelete = (id: string) => {
+    const modal = document.getElementById("delete-confirm-modal");
+    if (modal) {
+        modal.classList.remove("hidden");
+        const confirmBtn = document.getElementById("confirm-delete-btn");
+        
+        // Remove existing listeners to prevent duplicates
+        const newConfirmBtn = confirmBtn?.cloneNode(true);
+        confirmBtn?.parentNode?.replaceChild(newConfirmBtn!, confirmBtn);
+
+        newConfirmBtn?.addEventListener("click", async () => {
+            await mesajSil(id);
+            gizleModal("delete-confirm-modal");
+        });
+    }
+};
