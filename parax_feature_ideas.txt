@@ -1,0 +1,21 @@
+Parax Feature Ideas (100)
+-------------------------
+
+I. Communication & Interaction Enhancements
+1. Direct Messaging (DM): Private 1-on-1 chat. [COMPLETED]
+2. Friends List: Dedicated list to manage connections. [COMPLETED]
+3. Message Reactions: Emoji reactions on messages.
+4. Typing Indicators: Real-time status for channels.
+5. Edit Messages: Allow users to update their sent text. [COMPLETED]
+6. Delete Messages: Allow self-deletion of messages. [COMPLETED]
+7. Read Receipts: Optional indicator for message status.
+8. Message Threading: Reply to specific messages to create sub-conversations.
+9. Pinned Messages: Pin important channel messages.
+10. Message Search: Searchable history within channels.
+11. Rich Media Embedding: Automatically expand image and video links.
+12. Giphy Integration: In-chat GIF search/keyboard.
+13. Markdown Support: Bold, Italic, Code block rendering.
+14. Spoiler Tags: Blur content in messages until clicked.
+15. Mentions (@user): Autocomplete user handles.
+
+... (Remaining items 16-100)
