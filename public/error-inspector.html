@@ -11,6 +11,7 @@
   <script src="https://www.gstatic.com/firebasejs/11.0.1/firebase-firestore-compat.js"></script>
   <script src="app.js"></script>
   <script src="password.js"></script>
+  <script src="monitor-utils.js"></script>
   <style>
     .inspector-container { padding: 24px; max-width: 1400px; margin: 56px auto 0; }
     .toolbar { display: flex; gap: 12px; margin-bottom: 24px; background: var(--bg-secondary); padding: 16px; border-radius: var(--radius); border: 1px solid var(--border); }
@@ -84,22 +85,11 @@
     let logs = [];
 
     async function loadLogs() {
-        const user = firebase.auth().currentUser;
-        if (!user) return;
-        
         try {
-            const token = await user.getIdToken();
-            const response = await fetch('https://parax-vqqb.onrender.com/api/monitoring/logs', {
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
-            
-            if (!response.ok) throw new Error('Failed to fetch logs');
-            
-            logs = await response.json();
+            logs = await ParaxMonitor.fetch('/api/monitoring/logs');
             renderLogs(logs);
         } catch (err) {
             console.error(err);
-            alert("Error loading logs: " + err.message);
         }
     }
 
@@ -114,9 +104,9 @@
         `).join("");
     }
 
-    firebase.auth().onAuthStateChanged((user) => {
-        if (user) loadLogs();
-    });
+    if (sessionStorage.getItem("authenticated") === "true") {
+        loadLogs();
+    }
     
     function showDetail(index) {
       const log = logs[index];

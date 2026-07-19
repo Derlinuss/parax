@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<!-- saved from url=(0071)https://telegra.ph/G%C3%BCvenlik-a%C3%A7%C4%B1%C4%9F%C4%B1-sonucu-07-14 -->
+<html><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+    
+    <title>Güvenlik açığı sonucu – Telegraph</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, minimum-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="format-detection" content="telephone=no">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="MobileOptimized" content="176">
+    <meta name="HandheldFriendly" content="True">
+    <meta name="robots" content="index, follow">
+    <meta property="og:type" content="article">
+    <meta property="og:title" content="Güvenlik açığı sonucu">
+    <meta property="og:description" content="🔒 Güvenlik Tarama Raporu – Parax (parax-vqqb.onrender.com)
+🔴 Kritik Seviyede Açıklar (Yayına Almadan Önce Mutlaka Çözülmeli)
+1. Sunucu Kaynak Kodları Herkese Açık
+Tüm TypeScript kaynak kodları express.static() üzerinden herkese açık şekilde servis ediliyor.
+Doğrudan erişilebilen bazı dosyalar:
+/server/src/server.ts → Sunucu yapılandırması, port ve CORS ayarları
+/server/src/routes/auth.ts → Firebase Admin SDK kimlik doğrulama işlemleri
+/server/src/routes/voice.ts → Daily.co API kullanımı
+/server/src/middleware/auth.ts…">
+    <meta property="og:image" content="">
+    <meta property="og:site_name" content="Telegraph">
+    <meta property="article:published_time" content="2026-07-14T10:00:39+0000">
+    <meta property="article:modified_time" content="2026-07-14T10:00:39+0000">
+    <meta property="article:author" content="">
+    <meta name="twitter:card" content="summary">
+    <meta name="twitter:title" content="Güvenlik açığı sonucu">
+    <meta name="twitter:description" content="🔒 Güvenlik Tarama Raporu – Parax (parax-vqqb.onrender.com)
+🔴 Kritik Seviyede Açıklar (Yayına Almadan Önce Mutlaka Çözülmeli)
+1. Sunucu Kaynak Kodları Herkese Açık
+Tüm TypeScript kaynak kodları express.static() üzerinden herkese açık şekilde servis ediliyor.
+Doğrudan erişilebilen bazı dosyalar:
+/server/src/server.ts → Sunucu yapılandırması, port ve CORS ayarları
+/server/src/routes/auth.ts → Firebase Admin SDK kimlik doğrulama işlemleri
+/server/src/routes/voice.ts → Daily.co API kullanımı
+/server/src/middleware/auth.ts…">
+    <meta name="twitter:image" content="">
+    <link rel="canonical" href="https://telegra.ph/G%C3%BCvenlik-a%C3%A7%C4%B1%C4%9F%C4%B1-sonucu-07-14">
+    <link rel="shortcut icon" href="https://telegra.ph/favicon.ico?1" type="image/x-icon">
+    <link rel="icon" type="image/png" href="https://telegra.ph/images/favicon.png?1" sizes="16x16">
+    <link rel="icon" type="image/png" href="https://telegra.ph/images/favicon_2x.png?1" sizes="32x32">
+    <link href="./Güvenlik açığı sonucu – Telegraph_files/quill.core.min.css" rel="stylesheet">
+    <link href="./Güvenlik açığı sonucu – Telegraph_files/core.min.css" rel="stylesheet">
+  </head>
+  <body>
+    <div class="tl_page_wrap">
+      <div class="tl_page">
+        <main class="tl_article">
+          <header class="tl_article_header" dir="auto">
+            <h1>Güvenlik açığı sonucu</h1>
+            <address>
+              <a rel="author"></a><!--
+           --><time datetime="2026-07-14T10:00:39+0000">July 14, 2026</time>
+            </address>
+          </header>
+          <article id="_tl_editor" class="tl_article_content ql-container ql-disabled"><div class="ql-editor" contenteditable="false"><h1 dir="auto" data-placeholder="Title" data-label="Title">Güvenlik açığı sonucu</h1><address dir="auto" data-placeholder="Your name" data-label="Author" class="empty"><br></address><p dir="auto">🔒 Güvenlik Tarama Raporu – Parax (parax-vqqb.onrender.com)</p><h3 dir="auto" id="🔴-Kritik-Seviyede-Açıklar-(Yayına-Almadan-Önce-Mutlaka-Çözülmeli)">🔴 Kritik Seviyede Açıklar (Yayına Almadan Önce Mutlaka Çözülmeli)</h3><h3 dir="auto" id="1.-Sunucu-Kaynak-Kodları-Herkese-Açık">1. Sunucu Kaynak Kodları Herkese Açık</h3><p dir="auto">Tüm TypeScript kaynak kodları <code>express.static()</code> üzerinden herkese açık şekilde servis ediliyor.</p><p dir="auto">Doğrudan erişilebilen bazı dosyalar:</p><ul dir="auto"><li><code>/server/src/server.ts</code> → Sunucu yapılandırması, port ve CORS ayarları</li><li><code>/server/src/routes/auth.ts</code> → Firebase Admin SDK kimlik doğrulama işlemleri</li><li><code>/server/src/routes/voice.ts</code> → Daily.co API kullanımı</li><li><code>/server/src/middleware/auth.ts</code> → Token doğrulama mantığı</li><li><code>/server/src/config/firebase.ts</code> → Firebase yapılandırması</li><li><code>/firebase.json</code> → Firebase proje konfigürasyonu</li><li><code>/server/</code> ve <code>/functions/</code> dizinleri</li></ul><p dir="auto"><strong>Risk:</strong> Uygulamanın iç yapısı, endpoint'ler ve güvenlik mantığı üçüncü kişilere tamamen açığa çıkıyor.</p><p dir="auto"><strong>Çözüm:</strong> <code>express.static()</code> yalnızca <code>public/</code> gibi gerekli dosyaların bulunduğu dizini servis etmeli.</p><hr><h3 dir="auto" id="2.-Firestore-Kuralları-ile-Yetki-Yükseltme-(Privilege-Escalation)">2. Firestore Kuralları ile Yetki Yükseltme (Privilege Escalation)</h3><pre spellcheck="false" dir="auto">match /servers/{serverCode}/roles/{roleId} {
+  allow create, update, delete: if request.auth != null;
+}
+</pre><p dir="auto">Kimliği doğrulanmış herhangi bir kullanıcı:</p><ul dir="auto"><li>Rol oluşturabiliyor</li><li>Rol düzenleyebiliyor</li><li>Rol silebiliyor</li></ul><p dir="auto">Bu durum saldırganın kendine yönetici yetkisi vermesine ve tüm sunucular üzerinde tam yetki elde etmesine neden olabilir.</p><p dir="auto"><strong>Çözüm:</strong> Rol işlemleri için <code>manage_roles</code> veya eşdeğer bir yetki kontrolü uygulanmalı.</p><hr><h3 dir="auto" id="3.-Sunucu-Üyeliği-Korumasız">3. Sunucu Üyeliği Korumasız</h3><pre spellcheck="false" dir="auto">match /serverMembers/{docId} {
+  allow create: if request.auth != null;
+}
+</pre><p dir="auto">Kimliği doğrulanmış herhangi bir kullanıcı, sunucu kodunu bildiği sürece istediği sunucuya katılabiliyor.</p><p dir="auto"><strong>Risk:</strong></p><ul dir="auto"><li>Özel sunuculara izinsiz erişim</li><li>Mesajların okunabilmesi</li><li>Üye bilgilerinin görüntülenebilmesi</li></ul><p dir="auto"><strong>Çözüm:</strong> Davet sistemi veya mevcut üye/yönetici onayı zorunlu hale getirilmeli.</p><hr><h3 dir="auto" id="🟠-Yüksek-Öncelikli-Açıklar">🟠 Yüksek Öncelikli Açıklar</h3><h3 dir="auto" id="4.-Oda-Şifreleri-Düz-Metin-Olarak-Saklanıyor">4. Oda Şifreleri Düz Metin Olarak Saklanıyor</h3><pre spellcheck="false" dir="auto">if (password) {
+  data.password = password;
+}
+</pre><p dir="auto">Şifreler hash'lenmeden Firestore'a kaydediliyor.</p><p dir="auto"><strong>Çözüm:</strong> <code>bcrypt</code> veya benzeri güvenli bir algoritma kullanılmalı.</p><hr><h3 dir="auto" id="5.-Avatarlar-Base64-Olarak-Firestore&#39;da-Saklanıyor">5. Avatarlar Base64 Olarak Firestore'da Saklanıyor</h3><p dir="auto">Avatarlar doğrudan Firestore'a yazılıyor.</p><p dir="auto"><strong>Riskler:</strong></p><ul dir="auto"><li>Çok yüksek okuma/yazma maliyeti</li><li>Performans sorunları</li><li>Doküman boyutu problemleri</li></ul><p dir="auto"><strong>Çözüm:</strong> Dosyalar Firebase Storage üzerinde tutulmalı.</p><hr><h3 dir="auto" id="6.-Kanal-Oluşturma-Yetki-Kontrolü-Yok">6. Kanal Oluşturma Yetki Kontrolü Yok</h3><p dir="auto">Kimliği doğrulanmış herhangi bir kullanıcı istediği sunucuda kanal oluşturabiliyor.</p><p dir="auto"><strong>Çözüm:</strong> <code>manage_channels</code> yetkisi kontrol edilmeli.</p><hr><h3 dir="auto" id="🟡-Orta-Öncelikli-Açıklar">🟡 Orta Öncelikli Açıklar</h3><h3 dir="auto" id="7.-Güvenlik-Header&#39;ları-Eksik">7. Güvenlik Header'ları Eksik</h3><ul dir="auto"><li>❌ Content-Security-Policy</li><li>❌ X-Frame-Options</li><li>❌ X-Content-Type-Options</li><li>❌ Strict-Transport-Security</li><li>❌ Referrer-Policy</li><li>❌ Permissions-Policy</li></ul><hr><h3 dir="auto" id="8.-CORS-Fazla-İzin-Veriyor">8. CORS Fazla İzin Veriyor</h3><pre spellcheck="false" dir="auto">cors({
+  origin: true,
+  credentials: true
+})
+</pre><p dir="auto">Her origin'e izin verilmesi güvenlik riskini artırıyor.</p><p dir="auto"><strong>Çözüm:</strong> Yalnızca izin verilen domain'ler tanımlanmalı.</p><hr><h3 dir="auto" id="9.-Zayıf-Şifre-Politikası">9. Zayıf Şifre Politikası</h3><ul dir="auto"><li>Minimum 6 karakter</li><li>Karmaşık şifre zorunluluğu yok</li><li>Rate limiting bulunmuyor</li></ul><hr><h3 dir="auto" id="10.-Math.random()-ile-Kod-Üretimi">10. <code>Math.random()</code> ile Kod Üretimi</h3><pre spellcheck="false" dir="auto">Math.floor(10000000000 + Math.random() * 90000000000)
+</pre><p dir="auto">Kriptografik olarak güvenli değildir.</p><p dir="auto"><strong>Çözüm:</strong> <code>crypto.randomInt()</code> veya UUID kullanılmalı.</p><hr><h3 dir="auto" id="11.-errors-Koleksiyonu-Korumasız">11. <code>errors</code> Koleksiyonu Korumasız</h3><p dir="auto">Hata logları içerisinde:</p><ul dir="auto"><li>userId</li><li>URL</li><li>userAgent</li></ul><p dir="auto">gibi bilgiler bulunuyor ve erişim yeterince sınırlandırılmamış.</p><hr><h3 dir="auto" id="12.-/api/auth/profile-Endpoint&#39;i">12. <code>/api/auth/profile</code> Endpoint'i</h3><p dir="auto">Kimliği doğrulanmış kullanıcılar:</p><ul dir="auto"><li>uid</li><li>email</li><li>displayName</li></ul><p dir="auto">bilgilerini alabiliyor ve endpoint üzerinde rate limiting bulunmuyor.</p><hr><h3 dir="auto" id="🟢-Düşük-Öncelikli-Konular">🟢 Düşük Öncelikli Konular</h3><ul dir="auto"><li><code>package.json</code> herkese açık.</li><li>Daily.co API kullanımı kaynak kod sızıntısıyla birlikte risk oluşturuyor.</li><li>Eski oda sistemi ve yeni sunucu sistemi aynı anda çalışıyor.</li></ul><hr><p dir="auto">Öncelikli Yapılması Gerekenler</p><ol dir="auto"><li><code>express.static()</code> yalnızca <code>public/</code> dizinini servis etmeli.</li><li>Firestore yetki kuralları yeniden yazılmalı.</li><li>Sunucu üyeliği ve davet sistemi güvenli hale getirilmeli.</li><li>Oda şifreleri hash'lenmeli.</li><li>Avatarlar Firebase Storage'a taşınmalı.</li><li>Güvenlik header'ları eklenmeli.</li><li>CORS yapılandırması daraltılmalı.</li><li>Rastgele kod üretimi güvenli hale getirilmeli.</li><li><code>errors</code> koleksiyonu erişim kuralları kısıtlanmalı.</li></ol><h3 dir="auto" id="Sonuç">Sonuç</h3><p dir="auto">Yayına alınmadan önce özellikle aşağıdaki üç açık mutlaka giderilmelidir:</p><ul dir="auto"><li>Kaynak kodlarının herkese açık olması</li><li>Firestore üzerinden yetki yükseltme açığı</li><li>Korumasız sunucu üyelik sistemi</li></ul><p dir="auto">Bu üç açık tek başına sistemin tamamen ele geçirilmesine neden olabilecek seviyede kritiktir.</p></div><div class="ql-clipboard" contenteditable="true" tabindex="-1"></div><div id="_tl_link_tooltip" class="tl_link_tooltip"></div><div id="_tl_tooltip" class="tl_tooltip">
+            <div class="buttons">
+              <span class="button_hover"></span>
+              <span class="button_group"><!--
+             --><button id="_bold_button"></button><!--
+             --><button id="_italic_button"></button><!--
+             --><button id="_link_button"></button><!--
+           --></span><!--
+           --><span class="button_group"><!--
+             --><button id="_header_button"></button><!--
+             --><button id="_subheader_button"></button><!--
+             --><button id="_quote_button"></button><!--
+           --></span>
+            </div>
+            <div class="prompt">
+              <span class="close"></span>
+              <div class="prompt_input_wrap"><input type="url" class="prompt_input"></div>
+            </div>
+          </div><div id="_tl_blocks" class="tl_blocks">
+            <div class="buttons">
+              <button id="_image_button"></button><!--
+           --><button id="_embed_button"></button>
+            </div>
+          </div></article>
+          
+          
+          
+          <aside class="tl_article_buttons">
+            <div class="account account_top"></div>
+            <button id="_edit_button" class="button edit_button">Edit</button><!--
+         --><button id="_publish_button" class="button publish_button">Publish</button>
+            <div class="account account_bottom"></div>
+            <div id="_error_msg" class="error_msg"></div>
+          </aside>
+        </main>
+      </div>
+          <div class="tl_page_footer tl_page_footer_visible">
+      <div id="_report_button" class="tl_footer_button">Report content on this page</div>
+    </div>
+    </div>
+      <div class="tl_popup tl_popup_hidden" id="_report_popup">
+    <main class="tl_popup_body tl_report_popup">
+      <form id="_report_form" method="post">
+        <section>
+          <h2 class="tl_popup_header">Report Page</h2>
+          <div class="tl_radio_items">
+            <label class="tl_radio_item">
+              <input type="radio" class="radio" name="reason" value="violence">
+              <span class="tl_radio_item_label">Violence</span>
+            </label>
+            <label class="tl_radio_item">
+              <input type="radio" class="radio" name="reason" value="childabuse">
+              <span class="tl_radio_item_label">Child Abuse</span>
+            </label>
+            <label class="tl_radio_item">
+              <input type="radio" class="radio" name="reason" value="copyright">
+              <span class="tl_radio_item_label">Copyright</span>
+            </label>
+            <label class="tl_radio_item">
+              <input type="radio" class="radio" name="reason" value="illegal_drugs">
+              <span class="tl_radio_item_label">Illegal Drugs</span>
+            </label>
+            <label class="tl_radio_item">
+              <input type="radio" class="radio" name="reason" value="personal_details">
+              <span class="tl_radio_item_label">Personal Details</span>
+            </label>
+            <label class="tl_radio_item">
+              <input type="radio" class="radio" name="reason" value="other">
+              <span class="tl_radio_item_label">Other</span>
+            </label>
+          </div>
+          <div class="tl_textfield_item tl_comment_field">
+            <input type="text" class="tl_textfield" name="comment" value="" placeholder="Add Comment…">
+          </div>
+          <div class="tl_copyright_field">
+            Please submit your DMCA takedown request to <a href="mailto:dmca@telegram.org?subject=Report%20to%20Telegraph%20page%20%22G%C3%BCvenlik%20a%C3%A7%C4%B1%C4%9F%C4%B1%20sonucu%22&amp;body=Reported%20page%3A%20https%3A%2F%2Ftelegra.ph%2FG%C3%BCvenlik-a%C3%A7%C4%B1%C4%9F%C4%B1-sonucu-07-14%0A%0A%0A" target="_blank">dmca@telegram.org</a>
+          </div>
+        </section>
+        <aside class="tl_popup_buttons">
+          <button type="reset" class="button" id="_report_cancel">Cancel</button>
+          <button type="submit" class="button submit_button">Report</button>
+        </aside>
+      </form>
+    </main>
+  </div>
+    
+    <script>var T={"apiUrl":"https:\/\/edit.telegra.ph","uploadEnabled":false,"datetime":1784023239,"pageId":"3021bb066119a9d3332cd","editable":true};(function(){var b=document.querySelector('time');if(b&&T.datetime){var a=new Date(1E3*T.datetime),d='January February March April May June July August September October November December'.split(' ')[a.getMonth()],c=a.getDate();b.innerText=d+' '+(10>c?'0':'')+c+', '+a.getFullYear()}})();</script>
+    <script src="./Güvenlik açığı sonucu – Telegraph_files/jquery.min.js.indir"></script>
+    <script src="./Güvenlik açığı sonucu – Telegraph_files/jquery.selection.min.js.indir"></script>
+    <script src="./Güvenlik açığı sonucu – Telegraph_files/autosize.min.js.indir"></script>
+    <script src="./Güvenlik açığı sonucu – Telegraph_files/load-image.all.min.js.indir"></script>
+    <script src="./Güvenlik açığı sonucu – Telegraph_files/quill.min.js.indir"></script>
+    <script src="./Güvenlik açığı sonucu – Telegraph_files/core.min.js.indir"></script>
+    <script async="" src="https://t.me/_websync_?path=G%C3%BCvenlik-a%C3%A7%C4%B1%C4%9F%C4%B1-sonucu-07-14&amp;hash=ac94f6021327b05f37"></script>
+  
+</body></html>

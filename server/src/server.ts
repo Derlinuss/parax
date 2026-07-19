@@ -50,7 +50,7 @@ app.use((_req, res, next) => {
     "default-src 'self'",
     "script-src 'self' https://www.gstatic.com https://unpkg.com https://apis.google.com 'unsafe-inline'",
     "style-src 'self' 'unsafe-inline'",
-    "connect-src 'self' https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://firestore.googleapis.com https://webappparax.firebasestorage.app https://api.daily.co wss://*.daily.co https://*.gstatic.com",
+    "connect-src 'self' https://parax-vqqb.onrender.com https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://firestore.googleapis.com https://webappparax.firebasestorage.app https://api.daily.co wss://*.daily.co https://*.gstatic.com",
     "frame-src 'self' https://*.daily.co https://*.firebaseapp.com",
     "img-src 'self' https://webappparax.firebasestorage.app data: blob:",
     "font-src 'self' data:",
