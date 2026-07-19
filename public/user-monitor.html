@@ -108,7 +108,7 @@
         const user = firebase.auth().currentUser;
         if (!user) return;
         const token = await user.getIdToken();
-        const response = await fetch('/api/monitoring/users', {
+        const response = await fetch('https://parax-vqqb.onrender.com/api/monitoring/users', {
             headers: { 'Authorization': `Bearer ${token}` }
         });
         if (response.ok) {
