@@ -804,6 +804,11 @@ function panoyuBaslat() {
     settingsBtn?.addEventListener("click", () => {
         window.location.href = "/settings.html";
     });
+    const sidebarToggleBtn = document.getElementById("sidebar-toggle-btn");
+    sidebarToggleBtn?.addEventListener("click", () => {
+        channelSidebar?.classList.toggle("hidden");
+    });
+
     dashboardUnsub = kullaniciSunuculari((servers) => {
         userServersCache = servers;
         sunucuListesiGoster(servers);
@@ -1340,6 +1345,15 @@ function kanalListesiGoster(channels, serverCode) {
                         if (typeof ParaVoice !== "undefined") {
                             ParaVoice.join(id, name);
                         }
+                        async function mesajSil(messageId) {
+                            await db.collection("messages").doc(messageId).delete();
+                        }
+                        async function mesajDuzenle(messageId, newText) {
+                            await db.collection("messages").doc(messageId).update({
+                                text: newText,
+                                editedAt: firebase.firestore.FieldValue.serverTimestamp(),
+                            });
+                        }
                     }
                 });
             });
@@ -1407,15 +1421,22 @@ function kanalSec(channelId, channelName, serverCode) {
                 const isAtBottom = wasEmpty || messagesEl.scrollHeight - messagesEl.scrollTop - messagesEl.clientHeight < 100;
                 messagesEl.innerHTML = messages.map((m) => {
                     const time = m.createdAt?.toDate?.()?.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) || "";
+                    const isOwn = m.senderId === auth.currentUser?.uid;
                     return `
-            <div class="message ${m.senderId === auth.currentUser?.uid ? "message-own" : ""}">
-              <div class="message-header">
-                <span class="message-sender">${temizle(m.senderName)}</span>
-                <span class="message-time">${time}</span>
-              </div>
-              <div class="message-text">${temizle(m.text)}</div>
-            </div>
-          `;
+             <div class="message ${isOwn ? "message-own" : ""}" data-message-id="${m.id}">
+               <div class="message-header">
+                 <span class="message-sender">${temizle(m.senderName)}</span>
+                 <span class="message-time">${time}</span>
+               </div>
+               <div class="message-text">${temizle(m.text)}</div>
+               ${isOwn ? `
+                 <div class="message-actions">
+                   <button class="msg-btn edit" onclick="startEdit('${m.id}')">Edit</button>
+                   <button class="msg-btn delete" onclick="confirmDelete('${m.id}')">Delete</button>
+                 </div>
+               ` : ''}
+             </div>
+           `;
                 }).join("");
                 if (isAtBottom)
                     messagesEl.scrollTop = messagesEl.scrollHeight;
@@ -1540,15 +1561,22 @@ function sohbetiBaslat() {
                 const isAtBottom = wasEmpty || messagesEl.scrollHeight - messagesEl.scrollTop - messagesEl.clientHeight < 100;
                 messagesEl.innerHTML = messages.map(m => {
                     const time = m.createdAt?.toDate?.()?.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) || "";
+                    const isOwn = m.senderId === auth.currentUser?.uid;
                     return `
-            <div class="message ${m.senderId === auth.currentUser?.uid ? "message-own" : ""}">
-              <div class="message-header">
-                <span class="message-sender">${temizle(m.senderName)}</span>
-                <span class="message-time">${time}</span>
-              </div>
-              <div class="message-text">${temizle(m.text)}</div>
-            </div>
-          `;
+             <div class="message ${isOwn ? "message-own" : ""}" data-message-id="${m.id}">
+               <div class="message-header">
+                 <span class="message-sender">${temizle(m.senderName)}</span>
+                 <span class="message-time">${time}</span>
+               </div>
+               <div class="message-text">${temizle(m.text)}</div>
+               ${isOwn ? `
+                 <div class="message-actions">
+                   <button class="msg-btn edit" onclick="startEdit('${m.id}')">Edit</button>
+                   <button class="msg-btn delete" onclick="confirmDelete('${m.id}')">Delete</button>
+                 </div>
+               ` : ''}
+             </div>
+           `;
                 }).join("");
                 if (isAtBottom)
                     messagesEl.scrollTop = messagesEl.scrollHeight;
@@ -1658,6 +1686,18 @@ function navBarGuncelle(user) {
             btn.style.display = "";
         });
     }
+}
+window.hataGoster = hataGoster;
+window.sifremiUnuttum = sifremiUnuttum;
+async function sifremiUnuttum(identifier) {
+    let email = identifier;
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(identifier)) {
+        const snapshot = await db.collection("users").where("username", "==", identifier).get();
+        if (snapshot.empty)
+            throw new Error("Kullanıcı bulunamadı.");
+        email = snapshot.docs[0].data().email;
+    }
+    await auth.sendPasswordResetEmail(email);
 }
 function hataGoster(message, type) {
     if (!message)
@@ -1880,6 +1920,7 @@ function girisKontrol() {
     const emailInput = form.querySelector("#email");
     const passwordInput = form.querySelector("#password");
     const googleBtn = document.getElementById("google-login");
+    const anonymousBtn = document.getElementById("anonymous-login");
     if (googleBtn) {
         googleBtn.addEventListener("click", async () => {
             try {
@@ -1890,6 +1931,37 @@ function girisKontrol() {
                 const msg = authHatasi(error);
                 if (msg)
                     hataGoster(msg);
+            }
+        });
+    }
+    if (anonymousBtn) {
+        const modal = document.getElementById("username-modal");
+        const confirmBtn = document.getElementById("username-confirm");
+        const input = document.getElementById("username-input");
+        confirmBtn?.addEventListener("click", async () => {
+            const username = input?.value.trim();
+            if (!username)
+                return alert("Please enter a username");
+            try {
+                await auth.signInAnonymously();
+                const user = auth.currentUser;
+                if (user) {
+                    await user.updateProfile({ displayName: username });
+                    await db.collection("users").doc(user.uid).set({
+                        username: username,
+                        isAnonymous: true,
+                        createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+                    });
+                    window.location.href = "/dashboard.html";
+                }
+            }
+            catch (error) {
+                hataGoster(authHatasi(error));
+            }
+        });
+        anonymousBtn.addEventListener("click", () => {
+            if (confirm("Warning: Your account is anonymous and all your data will be lost when you close this app or website. Continue?")) {
+                modal?.classList.remove("hidden");
             }
         });
     }
@@ -1956,3 +2028,36 @@ function girisKontrol() {
         }
     });
 }
+async function mesajSil(messageId) {
+    await db.collection("messages").doc(messageId).delete();
+}
+async function mesajDuzenle(messageId, newText) {
+    await db.collection("messages").doc(messageId).update({
+        text: newText,
+        editedAt: firebase.firestore.FieldValue.serverTimestamp(),
+    });
+}
+window.startEdit = (id) => {
+    const messageEl = document.querySelector(`.message[data-message-id="${id}"]`);
+    const textEl = messageEl?.querySelector(".message-text");
+    if (!textEl)
+        return;
+    const oldText = textEl.textContent;
+    const newText = prompt("Edit message:", oldText || "");
+    if (newText !== null && newText !== oldText) {
+        mesajDuzenle(id, newText);
+    }
+};
+window.confirmDelete = (id) => {
+    const modal = document.getElementById("delete-confirm-modal");
+    if (modal) {
+        modal.classList.remove("hidden");
+        const confirmBtn = document.getElementById("confirm-delete-btn");
+        const newConfirmBtn = confirmBtn?.cloneNode(true);
+        confirmBtn?.parentNode?.replaceChild(newConfirmBtn, confirmBtn);
+        newConfirmBtn?.addEventListener("click", async () => {
+            await mesajSil(id);
+            gizleModal("delete-confirm-modal");
+        });
+    }
+};

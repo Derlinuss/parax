@@ -16,7 +16,7 @@
   <nav class="navbar">
     <div class="navbar-brand" onclick="window.location.href='/'">
       <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <rect width="24" height="24" rx="6" fill="#5865f2" />
+        <rect width="24" height="24" rx="6" fill="#22c55e" />
         <path d="M7 8.5C7 7.67 7.67 7 8.5 7H11V12H7V8.5ZM13 7H15.5C16.33 7 17 7.67 17 8.5V12H13V7ZM7 12H11V16.5C7.67 16.5 7 15.83 7 15V12ZM13 12H17V15C17 15.83 16.33 16.5 15.5 16.5H13V12Z" fill="white" />
       </svg>
       Parax
@@ -24,30 +24,32 @@
     <div class="navbar-links" id="nav-links"></div>
   </nav>
 
-  <div class="app-layout">
-    <!-- Server Sidebar -->
-    <div class="server-sidebar">
+  <!-- Server Topbar -->
+  <div class="server-topbar" id="server-topbar">
       <div class="server-item server-home" id="home-btn" title="Home">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
           <polyline points="9 22 9 12 15 12 15 22"/>
         </svg>
       </div>
-      <div class="server-divider"></div>
-      <div id="server-list"></div>
-      <div class="server-divider"></div>
-      <div class="server-section-label">Public</div>
-      <div class="server-item server-official" id="official-server-btn" title="Parax Official">
+      <div class="server-item server-home" id="friends-btn" title="Friends">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M12 2L2 7l10 5 10-5-10-5z"/>
-          <path d="M2 17l10 5 10-5"/>
-          <path d="M2 12l10 5 10-5"/>
+          <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+          <circle cx="9" cy="7" r="4"/>
+          <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
+          <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+        </svg>
+      </div>
+      <div class="server-item server-home" id="dms-btn" title="Direct Messages">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/>
+          <polyline points="22,6 12,13 2,6"/>
         </svg>
       </div>
       <div class="server-divider"></div>
-      <div class="server-item server-add" id="add-server-btn" title="Create Server">
-        <span>+</span>
-      </div>
+      <div id="server-list" class="horizontal-server-list"></div>
+      <div class="server-divider"></div>
+      <div class="server-item server-add" id="add-server-btn" title="Create Server"><span>+</span></div>
       <div class="server-item server-join" id="join-server-btn" title="Join Server">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
@@ -55,8 +57,9 @@
           <line x1="9" y1="14" x2="15" y2="14"/>
         </svg>
       </div>
-    </div>
+  </div>
 
+  <div class="app-layout">
     <!-- Channel Sidebar -->
     <div id="channel-sidebar" class="channel-sidebar hidden">
       <div class="channel-header" id="channel-header">
@@ -132,7 +135,6 @@
         <div class="chat-header">
           <button id="sidebar-toggle-btn" class="btn btn-secondary sidebar-toggle">☰</button>
           <div class="chat-header-info">
-            <button id="mobile-menu-btn" class="btn btn-secondary btn-sm" style="margin-right: 8px; display: none;">Menu</button>
             <span class="channel-hash" id="channel-hash">#</span>
             <span id="channel-name">channel</span>
           </div>
@@ -292,6 +294,18 @@
           <circle cx="12" cy="12" r="10"/>
         </svg>
       </button>
+    </div>
+  </div>
+
+  <!-- Confirm Delete Modal -->
+  <div id="confirm-delete-modal" class="modal-overlay hidden">
+    <div class="modal-card">
+      <h2>Are you sure?</h2>
+      <p class="subtitle">This action cannot be undone.</p>
+      <div class="modal-actions">
+        <button class="btn btn-secondary" id="confirm-delete-cancel">Cancel</button>
+        <button class="btn btn-primary" id="confirm-delete-confirm">Delete</button>
+      </div>
     </div>
   </div>
 
