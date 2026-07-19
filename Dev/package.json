@@ -1,0 +1,24 @@
+{
+  "name": "parax-dev-monitor",
+  "version": "1.0.0",
+  "description": "Parax monitoring desktop app",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "build": "electron-builder --win"
+  },
+  "devDependencies": {
+    "electron": "^33.0.0",
+    "electron-builder": "^25.0.0"
+  },
+  "build": {
+    "appId": "com.parax.monitor",
+    "productName": "ParaxMonitor",
+    "directories": {
+      "output": "dist"
+    },
+    "win": {
+      "target": ["nsis"]
+    }
+  }
+}
