@@ -8,10 +8,12 @@ import voiceRoutes from "./routes/voice";
 import logRoutes from "./routes/log";
 import monitoringRoutes from "./routes/monitoring";
 import { errorHandler } from "./middleware/errorHandler";
+import { trackLatency } from "./utils/metrics";
 
 dotenv.config();
 
 const app = express();
+app.use(trackLatency);
 const PORT = process.env.PORT || 3000;
 
 const allowedOrigins = [

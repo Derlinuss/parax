@@ -1,6 +1,7 @@
 import { Router, Response } from "express";
 import { verifyToken, AuthenticatedRequest } from "../middleware/auth";
 import { db } from "../config/firebase";
+import { getMetrics } from "../utils/metrics";
 
 const router = Router();
 
@@ -15,17 +16,16 @@ const isAdmin = (req: AuthenticatedRequest, res: Response, next: any) => {
 
 router.get("/system", verifyToken, isAdmin, async (req, res) => {
   try {
-    // Basic Render API call
     const response = await fetch(`https://api.render.com/v1/services/${process.env.RENDER_SERVICE_ID}`, {
       headers: { Authorization: `Bearer ${process.env.RENDER_API_KEY}` }
     });
     const data = await response.json();
+    const metrics = getMetrics();
     
-    // Simplistic mapping
     res.json({
         uptime: data.service?.serviceStatus === "live" ? "99.9%" : "Down",
-        latency: "45ms", // Hard to get from Render API directly without external monitoring
-        memory: "62%",   // Hard to get from Render API directly
+        latency: metrics.latency,
+        memory: metrics.memory,
         errorRate: "0.12%"
     });
   } catch (error) {
