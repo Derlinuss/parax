@@ -86,13 +86,20 @@
     async function loadLogs() {
         const user = firebase.auth().currentUser;
         if (!user) return;
-        const token = await user.getIdToken();
-        const response = await fetch('https://parax-vqqb.onrender.com/api/monitoring/logs', {
-            headers: { 'Authorization': `Bearer ${token}` }
-        });
-        if (response.ok) {
+        
+        try {
+            const token = await user.getIdToken();
+            const response = await fetch('https://parax-vqqb.onrender.com/api/monitoring/logs', {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            
+            if (!response.ok) throw new Error('Failed to fetch logs');
+            
             logs = await response.json();
             renderLogs(logs);
+        } catch (err) {
+            console.error(err);
+            alert("Error loading logs: " + err.message);
         }
     }
 
