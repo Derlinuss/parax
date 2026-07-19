@@ -17,14 +17,3 @@ electron/dist/
 c r e d e n t i a l s . t x t 
  
  p a r a x _ f e a t u r e _ i d e a s . t x t 
-
-# Monitoring pages
-public/user-monitor.html
-public/system-dashboard.html
-public/error-inspector.html
-
-# Clutter
-parax_feature_ideas.txt
-Ekran görüntüsü *.png
-Güvenlik açığı sonucu *.html
-Güvenlik açığı sonucu Telegraph_files/
