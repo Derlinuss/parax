@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Error & Log Inspector — Parax</title>
+  <link rel="stylesheet" href="styles.css" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/11.0.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/11.0.1/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/11.0.1/firebase-firestore-compat.js"></script>
+  <script src="app.js"></script>
+  <script src="password.js"></script>
+  <style>
+    .inspector-container { padding: 24px; max-width: 1400px; margin: 56px auto 0; }
+    .toolbar { display: flex; gap: 12px; margin-bottom: 24px; background: var(--bg-secondary); padding: 16px; border-radius: var(--radius); border: 1px solid var(--border); }
+    .toolbar input, .toolbar select { padding: 8px 12px; background: var(--input-bg); border: 1px solid var(--border); border-radius: var(--radius); color: var(--text-primary); }
+    
+    .inspector-grid { display: grid; grid-template-columns: 1fr 400px; gap: 24px; }
+    .log-list-card { background: var(--bg-secondary); border-radius: var(--radius-lg); border: 1px solid var(--border); overflow: hidden; }
+    .log-detail-card { background: var(--bg-secondary); padding: 24px; border-radius: var(--radius-lg); border: 1px solid var(--border); position: sticky; top: 80px; }
+    
+    .log-table { width: 100%; border-collapse: collapse; }
+    .log-table th, .log-table td { padding: 12px 16px; text-align: left; border-bottom: 1px solid var(--border); font-size: 0.85rem; }
+    .log-table tr { cursor: pointer; transition: background 0.15s; }
+    .log-table tr:hover { background: var(--bg-tertiary); }
+    
+    .badge-error { background: rgba(237, 66, 69, 0.2); color: #ff787b; padding: 2px 6px; border-radius: 4px; font-weight: 600; }
+    .stack-trace { background: #111; padding: 16px; border-radius: var(--radius); font-family: monospace; font-size: 0.8rem; overflow-x: auto; color: #57f287; margin-top: 16px; }
+  </style>
+</head>
+<body>
+  <nav class="navbar">
+    <div class="navbar-brand" onclick="window.location.href='/'">Parax</div>
+  </nav>
+  <nav class="admin-subnav">
+    <a href="system-dashboard.html" id="nav-system">System</a>
+    <a href="user-monitor.html" id="nav-users">Users</a>
+    <a href="error-inspector.html" id="nav-logs">Logs</a>
+  </nav>
+  <script>
+    document.getElementById('nav-logs').classList.add('active');
+  </script>
+
+  <div class="inspector-container">
+    <h1>Error & Log Inspector / Hata ve Günlük Denetleyicisi</h1>
+    
+    <div class="toolbar">
+      <input type="text" id="logSearch" placeholder="Search logs... / Günlüklerde ara..." style="flex:1;">
+      <select id="levelFilter">
+        <option value="all">All Levels / Tüm Seviyeler</option>
+        <option value="error">Error / Hata</option>
+        <option value="warn">Warn / Uyarı</option>
+      </select>
+      <button class="btn btn-primary" onclick="applyFilters()">Filter / Filtrele</button>
+    </div>
+
+    <div class="inspector-grid">
+      <div class="log-list-card">
+        <table class="log-table">
+          <thead>
+            <tr><th>Time / Zaman</th><th>Level / Seviye</th><th>Source / Kaynak</th><th>Message / Mesaj</th></tr>
+          </thead>
+          <tbody id="logBody">
+            <tr onclick="showDetail(0)"><td>14:32:01</td><td><span class="badge-error">ERROR</span></td><td>AuthService</td><td>NullPointerException...</td></tr>
+            <tr onclick="showDetail(1)"><td>14:30:15</td><td><span style="color:var(--brand)">WARN</span></td><td>Database</td><td>Slow query detected.</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="log-detail-card" id="detailPanel">
+        <h3>Log Details / Günlük Detayları</h3>
+        <p id="detailContent">Select a log entry to view details. / Detayları görmek için bir günlük seçin.</p>
+        <div id="stackTraceContainer" class="hidden">
+          <h4>Stack Trace / Yığın İzleme</h4>
+          <pre class="stack-trace" id="stackTrace"></pre>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const logBody = document.getElementById('logBody');
+    let logs = [];
+
+    async function loadLogs() {
+        const user = firebase.auth().currentUser;
+        if (!user) return;
+        const token = await user.getIdToken();
+        const response = await fetch('/api/monitoring/logs', {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (response.ok) {
+            logs = await response.json();
+            renderLogs(logs);
+        }
+    }
+
+    function renderLogs(logData) {
+        logBody.innerHTML = logData.map((log, index) => `
+            <tr onclick="showDetail(${index})">
+                <td>${log.time}</td>
+                <td><span class="badge-error">${log.level}</span></td>
+                <td>${log.source}</td>
+                <td>${log.message}</td>
+            </tr>
+        `).join("");
+    }
+
+    firebase.auth().onAuthStateChanged((user) => {
+        if (user) loadLogs();
+    });
+    
+    function showDetail(index) {
+      const log = logs[index];
+      document.getElementById('detailContent').textContent = `${log.message} (${log.source})`;
+      document.getElementById('stackTrace').textContent = log.trace;
+      document.getElementById('stackTraceContainer').classList.remove('hidden');
+    }
+    
+    function applyFilters() {
+      // ...
+    }
+  </script>
+</body>
+</html>

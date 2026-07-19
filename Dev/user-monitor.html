@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>User Traffic Monitor — Parax</title>
+  <link rel="stylesheet" href="styles.css" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/11.0.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/11.0.1/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/11.0.1/firebase-firestore-compat.js"></script>
+  <script src="app.js"></script>
+  <script src="password.js"></script>
+  <style>
+    .monitor-container { padding: 24px; max-width: 1200px; margin: 56px auto 0; }
+    .metric-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 24px; margin-bottom: 32px; }
+    .metric-card { background: var(--bg-secondary); padding: 24px; border-radius: var(--radius-lg); border: 1px solid var(--border); }
+    .metric-label { color: var(--text-secondary); font-size: 0.85rem; margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.05em; }
+    .metric-value { font-size: 2.5rem; font-weight: 700; color: var(--text-primary); }
+    
+    .charts-container { display: grid; grid-template-columns: 2fr 1fr; gap: 24px; margin-bottom: 32px; }
+    .chart-box { background: var(--bg-secondary); padding: 24px; border-radius: var(--radius-lg); border: 1px solid var(--border); }
+    
+    .traffic-table { width: 100%; border-collapse: collapse; background: var(--bg-secondary); border-radius: var(--radius-lg); overflow: hidden; }
+    .traffic-table th, .traffic-table td { padding: 16px; text-align: left; border-bottom: 1px solid var(--border); font-size: 0.9rem; }
+    .traffic-table th { background: var(--bg-tertiary); color: var(--text-muted); }
+  </style>
+</head>
+<body>
+  <nav class="navbar">
+    <div class="navbar-brand" onclick="window.location.href='/'">Parax</div>
+  </nav>
+  <nav class="admin-subnav">
+    <a href="system-dashboard.html" id="nav-system">System</a>
+    <a href="user-monitor.html" id="nav-users">Users</a>
+    <a href="error-inspector.html" id="nav-logs">Logs</a>
+  </nav>
+  <script>
+    document.getElementById('nav-users').classList.add('active');
+  </script>
+
+  <div class="monitor-container">
+    <h1>Real-time User Monitor / Gerçek Zamanlı Kullanıcı Monitörü</h1>
+    <p class="subtitle" style="margin-bottom: 24px; color: var(--text-secondary);">Active traffic, authentication methods, and signup velocity.</p>
+    
+    <div class="metric-grid">
+      <div class="metric-card">
+        <div class="metric-label">Concurrent Connections / Eşzamanlı Bağlantılar</div>
+        <div class="metric-value">1,248</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-label">Sign-up Velocity (1h) / Kayıt Hızı (1s)</div>
+        <div class="metric-value">+42</div>
+      </div>
+    </div>
+
+    <div class="charts-container">
+      <div class="chart-box">
+        <h3>Traffic History (Last Hour) / Trafik Geçmişi (Son Bir Saat)</h3>
+        <canvas id="trafficChart"></canvas>
+      </div>
+      <div class="chart-box">
+        <h3>Auth Methods / Kimlik Doğrulama Yöntemleri</h3>
+        <canvas id="authChart"></canvas>
+      </div>
+    </div>
+
+    <h2>Active User Sessions / Aktif Kullanıcı Oturumları</h2>
+    <table class="traffic-table">
+      <thead>
+        <tr>
+          <th>User / Kullanıcı</th>
+          <th>Auth Method / Yöntem</th>
+          <th>Session Start / Oturum Başlangıcı</th>
+          <th>Status / Durum</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr><td>meric_dev</td><td>Google</td><td>14:32:01</td><td><span style="color:var(--success)">● Online</span></td></tr>
+        <tr><td>parax_user_99</td><td>Email</td><td>14:30:15</td><td><span style="color:var(--success)">● Online</span></td></tr>
+        <tr><td>anonymous_42</td><td>Anonymous</td><td>14:28:45</td><td><span style="color:var(--text-muted)">● Idle</span></td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <script>
+    // Traffic Chart
+    const trafficChart = new Chart(document.getElementById('trafficChart'), {
+      type: 'line',
+      data: {
+        labels: ['60m', '50m', '40m', '30m', '20m', '10m', 'Now'],
+        datasets: [{ label: 'Connections / Bağlantılar', data: [900, 950, 1050, 1100, 1150, 1200, 1248], borderColor: '#57f287', fill: true, backgroundColor: 'rgba(87, 242, 135, 0.1)' }]
+      },
+      options: { responsive: true }
+    });
+
+    // Auth Chart
+    const authChart = new Chart(document.getElementById('authChart'), {
+      type: 'pie',
+      data: {
+        labels: ['Google', 'Email', 'Anonymous'],
+        datasets: [{ data: [600, 400, 248], backgroundColor: ['#4285F4', '#5865f2', '#949ba4'] }]
+      },
+      options: { responsive: true }
+    });
+
+    async function loadUserMonitor() {
+        const user = firebase.auth().currentUser;
+        if (!user) return;
+        const token = await user.getIdToken();
+        const response = await fetch('/api/monitoring/users', {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (response.ok) {
+            const data = await response.json();
+            document.querySelectorAll('.metric-value')[0].textContent = data.concurrent.toLocaleString();
+            document.querySelectorAll('.metric-value')[1].textContent = '+' + data.signupVelocity;
+            
+            trafficChart.data.datasets[0].data = data.trafficHistory;
+            trafficChart.update();
+            
+            authChart.data.datasets[0].data = data.authMethods;
+            authChart.update();
+        }
+    }
+    firebase.auth().onAuthStateChanged((user) => {
+        if (user) loadUserMonitor();
+    });
+  </script>
+</body>
+</html>

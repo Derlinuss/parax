@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>System Dashboard — Parax</title>
+  <link rel="stylesheet" href="styles.css" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/11.0.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/11.0.1/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/11.0.1/firebase-firestore-compat.js"></script>
+  <script src="app.js"></script>
+  <script src="password.js"></script>
+  <style>
+    .system-container { padding: 24px; max-width: 1200px; margin: 56px auto 0; }
+    .dashboard-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 24px; margin-bottom: 32px; }
+    .stat-card { background: var(--bg-secondary); padding: 24px; border-radius: var(--radius-lg); border: 1px solid var(--border); }
+    .stat-label { color: var(--text-secondary); font-size: 0.85rem; margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.05em; }
+    .stat-value { font-size: 2rem; font-weight: 700; color: var(--text-primary); }
+    
+    .charts-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-bottom: 32px; }
+    .chart-card { background: var(--bg-secondary); padding: 24px; border-radius: var(--radius-lg); border: 1px solid var(--border); }
+    
+    .logs-table { width: 100%; border-collapse: collapse; background: var(--bg-secondary); border-radius: var(--radius-lg); overflow: hidden; }
+    .logs-table th, .logs-table td { padding: 16px; text-align: left; border-bottom: 1px solid var(--border); font-size: 0.9rem; }
+    .logs-table th { background: var(--bg-tertiary); color: var(--text-muted); }
+  </style>
+</head>
+<body>
+  <nav class="navbar">
+    <div class="navbar-brand" onclick="window.location.href='/'">Parax</div>
+  </nav>
+  <nav class="admin-subnav">
+    <a href="system-dashboard.html" id="nav-system">System</a>
+    <a href="user-monitor.html" id="nav-users">Users</a>
+    <a href="error-inspector.html" id="nav-logs">Logs</a>
+  </nav>
+  <script>
+    document.getElementById('nav-system').classList.add('active');
+  </script>
+
+  <div class="system-container">
+    <h1>System Overview / Sistem Genel Bakış</h1>
+    
+    <div class="dashboard-grid">
+      <div class="stat-card">
+        <div class="stat-label">Uptime (Çalışma Süresi)</div>
+        <div class="stat-value">99.9%</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Avg Latency (Ortalama Gecikme)</div>
+        <div class="stat-value">45ms</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Memory Usage (Bellek Kullanımı)</div>
+        <div class="stat-value">62%</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">API Error Rate (API Hata Oranı)</div>
+        <div class="stat-value">0.12%</div>
+      </div>
+    </div>
+
+    <div class="charts-grid">
+      <div class="chart-card">
+        <h3 style="margin-bottom: 16px;">Latency Trends / Gecikme Eğilimleri</h3>
+        <canvas id="latencyChart"></canvas>
+      </div>
+      <div class="chart-card">
+        <h3 style="margin-bottom: 16px;">Memory/CPU Load / Bellek/İşlemci Yükü</h3>
+        <canvas id="loadChart"></canvas>
+      </div>
+    </div>
+
+    <h2 style="margin-bottom: 16px;">Recent System Logs / Son Sistem Günlükleri</h2>
+    <table class="logs-table">
+      <thead>
+        <tr>
+          <th>Time / Zaman</th>
+          <th>Level / Seviye</th>
+          <th>Message / Mesaj</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr><td>14:32:01</td><td>INFO</td><td>System heartbeat detected.</td></tr>
+        <tr><td>14:30:15</td><td>WARN</td><td>High memory usage on node-04.</td></tr>
+        <tr><td>14:28:45</td><td>ERROR</td><td>Failed API call on /auth/login.</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <script>
+    // Latency Chart
+    new Chart(document.getElementById('latencyChart'), {
+      type: 'line',
+      data: {
+        labels: ['1h ago', '45m ago', '30m ago', '15m ago', 'Now'],
+        datasets: [{ label: 'Latency (ms)', data: [42, 48, 44, 50, 45], borderColor: '#5865f2', tension: 0.4 }]
+      },
+      options: { responsive: true, scales: { y: { beginAtZero: true } } }
+    });
+
+    // Load Chart
+    new Chart(document.getElementById('loadChart'), {
+      type: 'doughnut',
+      data: {
+        labels: ['Used Memory / Kullanılan Bellek', 'Free Memory / Boş Bellek'],
+        datasets: [{ data: [62, 38], backgroundColor: ['#5865f2', '#313338'] }]
+      },
+      options: { responsive: true }
+    });
+
+    async function loadSystemMetrics() {
+        const user = firebase.auth().currentUser;
+        if (!user) {
+            window.location.href = '/login.html';
+            return;
+        }
+        const token = await user.getIdToken();
+        const response = await fetch('/api/monitoring/system', {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (response.ok) {
+            const data = await response.json();
+            // Update UI
+            document.querySelectorAll('.stat-value')[0].textContent = data.uptime;
+            document.querySelectorAll('.stat-value')[1].textContent = data.latency;
+            document.querySelectorAll('.stat-value')[2].textContent = data.memory;
+            document.querySelectorAll('.stat-value')[3].textContent = data.errorRate;
+        }
+    }
+    firebase.auth().onAuthStateChanged((user) => {
+        if (user) loadSystemMetrics();
+    });
+  </script>
+</body>
+</html>
