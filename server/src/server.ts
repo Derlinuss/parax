@@ -6,6 +6,7 @@ import dotenv from "dotenv";
 import authRoutes from "./routes/auth";
 import voiceRoutes from "./routes/voice";
 import logRoutes from "./routes/log";
+import { errorHandler } from "./middleware/errorHandler";
 
 dotenv.config();
 
@@ -79,6 +80,8 @@ app.get("/login", (_req, res) => {
 app.get("/signup", (_req, res) => {
   res.sendFile(path.join(__dirname, "../../public/signup.html"));
 });
+
+app.use(errorHandler);
 
 app.listen(PORT, () => {
   console.log(`Server running on http://localhost:${PORT}`);
