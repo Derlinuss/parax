@@ -1,5 +1,6 @@
 import { Router, Request, Response } from "express";
 import rateLimit from "express-rate-limit";
+import { db } from "../config/firebase";
 
 const router = Router();
 
@@ -11,9 +12,18 @@ const logLimiter = rateLimit({
   legacyHeaders: false,
 });
 
-router.post("/", logLimiter, (req: Request, res: Response) => {
+router.post("/", logLimiter, async (req: Request, res: Response) => {
   const data = req.body;
   const ts = new Date().toISOString();
+
+  try {
+    await db.collection("errors").add({
+      ...data,
+      timestamp: ts,
+    });
+  } catch (e) {
+    console.error("Failed to log error to firestore", e);
+  }
 
   console.error(`[Para:${ts}] ${data.type || "manual"} | ${data.message || "(no message)"}`);
   if (data.stack) {
