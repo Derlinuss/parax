@@ -117,7 +117,7 @@
             return;
         }
         const token = await user.getIdToken();
-        const response = await fetch('/api/monitoring/system', {
+        const response = await fetch('https://parax-vqqb.onrender.com/api/monitoring/system', {
             headers: { 'Authorization': `Bearer ${token}` }
         });
         if (response.ok) {
