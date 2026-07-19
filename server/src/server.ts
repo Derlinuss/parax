@@ -6,6 +6,7 @@ import dotenv from "dotenv";
 import authRoutes from "./routes/auth";
 import voiceRoutes from "./routes/voice";
 import logRoutes from "./routes/log";
+import monitoringRoutes from "./routes/monitoring";
 import { errorHandler } from "./middleware/errorHandler";
 
 dotenv.config();
@@ -67,6 +68,7 @@ app.use(express.static(path.join(__dirname, "../../public")));
 app.use("/api/auth", authRoutes);
 app.use("/api/voice", voiceRoutes);
 app.use("/api/log", logRoutes);
+app.use("/api/monitoring", monitoringRoutes);
 
 // sayfa route'ları
 app.get("/", (_req, res) => {
