@@ -1,5 +1,6 @@
 import express from "express";
 import cors from "cors";
+import helmet from "helmet";
 import path from "path";
 import dotenv from "dotenv";
 // routelar
@@ -38,30 +39,25 @@ app.use(express.json());
 // Express'in arkasındaki proxy'leri güvenilir say (render için)
 app.set("trust proxy", 1);
 
-// güvenlik başlıkları (FIXME: bazıları render'da sıkıntı çıkarabiliyor)
-app.use((_req, res, next) => {
-  res.setHeader("X-Content-Type-Options", "nosniff");
-  res.setHeader("X-Frame-Options", "DENY");
-  res.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
-  // permission policy - çoğu şeyi kapattık
-  res.setHeader("Permissions-Policy", "geolocation=(), microphone=(), camera=(), payment=(), usb=(), magnetometer=(), accelerometer=()");
-  res.setHeader("Strict-Transport-Security", "max-age=31536000; includeSubDomains; preload");
-  res.setHeader("Content-Security-Policy", [
-    "default-src 'self'",
-    "script-src 'self' https://www.gstatic.com https://unpkg.com https://apis.google.com 'unsafe-inline'",
-    "style-src 'self' 'unsafe-inline'",
-    "connect-src 'self' https://parax-vqqb.onrender.com https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://firestore.googleapis.com https://webappparax.firebasestorage.app https://api.daily.co wss://*.daily.co https://*.gstatic.com",
-    "frame-src 'self' https://*.daily.co https://*.firebaseapp.com",
-    "img-src 'self' https://webappparax.firebasestorage.app data: blob:",
-    "font-src 'self' data:",
-    "media-src 'self'",
-    "object-src 'none'",
-    "base-uri 'self'",
-    "form-action 'self'",
-    "worker-src 'self' blob:"
-  ].join("; "));
-  next();
-});
+// güvenlik başlıkları
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      "default-src": ["'self'"],
+      "script-src": ["'self'", "https://www.gstatic.com", "https://unpkg.com", "https://apis.google.com", "'unsafe-inline'"],
+      "style-src": ["'self'", "'unsafe-inline'"],
+      "connect-src": ["'self'", "https://parax-vqqb.onrender.com", "https://identitytoolkit.googleapis.com", "https://securetoken.googleapis.com", "https://firestore.googleapis.com", "https://webappparax.firebasestorage.app", "https://api.daily.co", "wss://*.daily.co", "https://*.gstatic.com"],
+      "frame-src": ["'self'", "https://*.daily.co", "https://*.firebaseapp.com"],
+      "img-src": ["'self'", "https://webappparax.firebasestorage.app", "data:", "blob:"],
+      "font-src": ["'self'", "data:"],
+      "media-src": ["'self'"],
+      "object-src": ["'none'"],
+      "base-uri": ["'self'"],
+      "form-action": ["'self'"],
+      "worker-src": ["'self'", "blob:"]
+    }
+  }
+}));
 
 // public klasöründeki static dosyaları serve et
 app.use(express.static(path.join(__dirname, "../../public")));
