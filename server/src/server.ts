@@ -10,10 +10,13 @@ import logRoutes from "./routes/log";
 import monitoringRoutes from "./routes/monitoring";
 import { errorHandler } from "./middleware/errorHandler";
 import { trackLatency } from "./utils/metrics";
+import { ipBlocker } from "./middleware/ipBlocker";
 
 dotenv.config();
 
 const app = express();
+app.set("trust proxy", 1); // Essential for getting correct client IP from Render
+app.use(ipBlocker); // Run before everything else
 app.use(trackLatency);
 const PORT = process.env.PORT || 3000;
 
