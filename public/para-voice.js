@@ -1,16 +1,18 @@
-// Para Voice — LiveKit voice & video chat module for Parax
+// Para Voice — WebRTC Voice & Video module using Custom Render/Fly WebSocket Signaling Server
 ;(function () {
   "use strict";
 
   var ParaVoice = {
-    _room: null,
+    _ws: null,
+    _localStream: null,
+    _peers: {}, // peerId -> RTCPeerConnection
     _activeChannelId: null,
     _isMuted: false,
+    _isVideoOff: false,
     _listeners: {},
 
     init: function () {
       var _this = this;
-      this._setupListeners();
       this._setupUI();
     },
 
@@ -31,20 +33,10 @@
       }
     },
 
-    _setupListeners: function () {
-      var _this = this;
-      this._listeners["visibilitychange"] = function () {
-        if (_this._room && _this._room.localParticipant) {
-          _this._room.localParticipant.setMicrophoneEnabled(!document.hidden);
-        }
-      };
-      document.addEventListener("visibilitychange", this._listeners["visibilitychange"]);
-    },
-
-    join: function (channelId, channelName) {
+    join: async function (channelId, channelName) {
       var _this = this;
 
-      if (this._room) {
+      if (this._ws) {
         this.leave();
       }
 
@@ -58,83 +50,227 @@
       var user = firebase.auth().currentUser;
       if (!user) return;
 
-      user.getIdToken().then(function (token) {
-        return fetch("/api/voice/token", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: "Bearer " + token,
-          },
-          body: JSON.stringify({ roomName: "channel_" + channelId })
+      try {
+        // 1. Get local audio/video stream
+        this._localStream = await navigator.mediaDevices.getUserMedia({
+          audio: true,
+          video: { width: 640, height: 480 }
         });
-      }).then(function (res) {
-        return res.json();
-      }).then(async function (data) {
-        if (data.error) {
-          if (typeof Para !== "undefined") Para.capture(data.error, { context: "voice-join" });
-          _this._showError("Voice chat unavailable: " + data.error);
-          _this.leave();
-          return;
+
+        // Show local video preview if container exists
+        var container = document.getElementById("voice-container");
+        if (container) {
+          container.innerHTML = "";
+          var localVideo = document.createElement("video");
+          localVideo.id = "local-video";
+          localVideo.srcObject = this._localStream;
+          localVideo.autoplay = true;
+          localVideo.muted = true;
+          localVideo.playsInline = true;
+          container.appendChild(localVideo);
         }
 
-        if (typeof LivekitClient === "undefined") {
-          _this._showError("LiveKit SDK not loaded");
-          return;
-        }
+        // 2. Connect to WebSocket signaling server
+        var wsUrl = window.FLY_SERVICES && window.FLY_SERVICES.MEDIA_SERVER 
+          ? window.FLY_SERVICES.MEDIA_SERVER 
+          : (window.location.hostname === "localhost" ? "ws://localhost:8080" : "wss://parax-media-server.onrender.com");
 
-        try {
-          const room = new LivekitClient.Room({
-            adaptiveStream: true,
-            dynacast: true,
-          });
+        // Ensure proper ws/wss protocol
+        if (wsUrl.startsWith("https://")) wsUrl = wsUrl.replace("https://", "wss://");
+        if (wsUrl.startsWith("http://")) wsUrl = wsUrl.replace("http://", "ws://");
 
-          _this._room = room;
+        var ws = new WebSocket(wsUrl);
+        this._ws = ws;
 
-          room.on(LivekitClient.RoomEvent.ParticipantConnected, (participant) => {
-            console.log("Participant connected:", participant.identity);
-          });
+        var peerId = "user_" + user.uid + "_" + Math.random().toString(36).substring(2, 7);
+        var userName = user.displayName || user.email || "User";
 
-          room.on(LivekitClient.RoomEvent.TrackSubscribed, (track, publication, participant) => {
-            if (track.kind === LivekitClient.Track.Kind.Audio) {
-              const element = track.attach();
-              document.body.appendChild(element);
+        ws.onopen = function () {
+          ws.send(JSON.stringify({
+            type: "join-room",
+            roomCode: "channel_" + channelId,
+            peerId: peerId,
+            userId: user.uid,
+            userName: userName,
+            streamType: "camera"
+          }));
+        };
+
+        ws.onmessage = async function (event) {
+          try {
+            var data = JSON.parse(event.data);
+            switch (data.type) {
+              case "joined-room": {
+                console.log("[Voice] Joined room. Existing peers:", data.existingPeers);
+                for (var p of data.existingPeers) {
+                  _this._createPeerConnection(p.peerId, true, ws, peerId);
+                }
+                break;
+              }
+              case "peer-joined": {
+                console.log("[Voice] Peer joined:", data.peerId);
+                // We don't initiate offer here; the new peer will receive existing peers or vice-versa
+                break;
+              }
+              case "signal": {
+                await _this._handleSignaling(data.fromPeerId, data.signalData, ws, peerId);
+                break;
+              }
+              case "peer-left": {
+                _this._removePeer(data.peerId);
+                break;
+              }
             }
-          });
+          } catch (err) {
+            console.error("[Voice WS Error]:", err);
+          }
+        };
 
-          room.on(LivekitClient.RoomEvent.Disconnected, () => {
-            _this._cleanup();
-          });
+        ws.onerror = function (err) {
+          console.error("[Voice WS Connection Error]:", err);
+          _this._showError("Voice connection error");
+        };
 
-          await room.connect(data.url, data.token);
-          await room.localParticipant.enableCameraAndMicrophone();
-          console.log("Connected to LiveKit room:", data.roomName);
-        } catch (err) {
-          console.error("LiveKit connection error:", err);
-          if (typeof Para !== "undefined") Para.capture(err, { context: "livekit-connect" });
-          _this._showError("Failed to connect to voice/video room");
-          _this.leave();
-        }
-      }).catch(function (err) {
-        if (typeof Para !== "undefined") Para.capture(err, { context: "voice-token-fetch" });
-        _this._showError("Failed to connect to voice chat");
+      } catch (err) {
+        console.error("[Voice Media Error]:", err);
+        if (typeof Para !== "undefined") Para.capture(err, { context: "voice-getUserMedia" });
+        _this._showError("Could not access microphone/camera");
         _this.leave();
+      }
+    },
+
+    _createPeerConnection: async function (remotePeerId, makeOffer, ws, myPeerId) {
+      var _this = this;
+      if (this._peers[remotePeerId]) return this._peers[remotePeerId];
+
+      var pc = new RTCPeerConnection({
+        iceServers: [
+          { urls: "stun:stun.l.google.com:19302" },
+          { urls: "stun:stun1.l.google.com:19302" }
+        ]
       });
+
+      this._peers[remotePeerId] = pc;
+
+      // Add local tracks to peer connection
+      if (this._localStream) {
+        this._localStream.getTracks().forEach(function (track) {
+          pc.addTrack(track, _this._localStream);
+        });
+      }
+
+      pc.onicecandidate = function (event) {
+        if (event.candidate) {
+          ws.send(JSON.stringify({
+            type: "signal",
+            targetPeerId: remotePeerId,
+            signalData: { candidate: event.candidate }
+          }));
+        }
+      };
+
+      pc.ontrack = function (event) {
+        console.log("[Voice] Received remote track from", remotePeerId);
+        var container = document.getElementById("voice-container");
+        if (container) {
+          var remoteVideoId = "remote-video-" + remotePeerId;
+          var existingVideo = document.getElementById(remoteVideoId);
+          if (!existingVideo) {
+            var videoEl = document.createElement("video");
+            videoEl.id = remoteVideoId;
+            videoEl.srcObject = event.streams[0];
+            videoEl.autoplay = true;
+            videoEl.playsInline = true;
+            container.appendChild(videoEl);
+          }
+        }
+      };
+
+      if (makeOffer) {
+        try {
+          var offer = await pc.createOffer();
+          await pc.setLocalDescription(offer);
+          ws.send(JSON.stringify({
+            type: "signal",
+            targetPeerId: remotePeerId,
+            signalData: { sdp: pc.localDescription }
+          }));
+        } catch (err) {
+          console.error("[Voice Offer Error]:", err);
+        }
+      }
+
+      return pc;
+    },
+
+    _handleSignaling: async function (fromPeerId, signalData, ws, myPeerId) {
+      var pc = this._peers[fromPeerId];
+      if (!pc) {
+        pc = await this._createPeerConnection(fromPeerId, false, ws, myPeerId);
+      }
+
+      try {
+        if (signalData.sdp) {
+          await pc.setRemoteDescription(new RTCSessionDescription(signalData.sdp));
+          if (signalData.sdp.type === "offer") {
+            var answer = await pc.createAnswer();
+            await pc.setLocalDescription(answer);
+            ws.send(JSON.stringify({
+              type: "signal",
+              targetPeerId: fromPeerId,
+              signalData: { sdp: pc.localDescription }
+            }));
+          }
+        } else if (signalData.candidate) {
+          await pc.addIceCandidate(new RTCIceCandidate(signalData.candidate));
+        }
+      } catch (err) {
+        console.error("[Voice Signaling Error]:", err);
+      }
+    },
+
+    _removePeer: function (peerId) {
+      if (this._peers[peerId]) {
+        this._peers[peerId].close();
+        delete this._peers[peerId];
+      }
+      var videoEl = document.getElementById("remote-video-" + peerId);
+      if (videoEl) videoEl.remove();
     },
 
     leave: function () {
-      if (this._room) {
-        try { this._room.disconnect(); } catch (e) {}
-        this._room = null;
+      if (this._ws) {
+        try {
+          this._ws.send(JSON.stringify({ type: "leave-room" }));
+          this._ws.close();
+        } catch (e) {}
+        this._ws = null;
       }
+
+      if (this._localStream) {
+        this._localStream.getTracks().forEach(function (track) {
+          track.stop();
+        });
+        this._localStream = null;
+      }
+
+      for (var peerId in this._peers) {
+        try { this._peers[peerId].close(); } catch (e) {}
+      }
+      this._peers = {};
+
       this._cleanup();
     },
 
     toggleMute: function () {
-      if (!this._room || !this._room.localParticipant) return;
-      var muteBtn = document.getElementById("voice-mute-btn");
-      this._isMuted = !this._isMuted;
-      this._room.localParticipant.setMicrophoneEnabled(!this._isMuted);
+      if (!this._localStream) return;
+      var audioTrack = this._localStream.getAudioTracks()[0];
+      if (!audioTrack) return;
 
+      this._isMuted = !this._isMuted;
+      audioTrack.enabled = !this._isMuted;
+
+      var muteBtn = document.getElementById("voice-mute-btn");
       if (muteBtn) {
         muteBtn.classList.toggle("muted", this._isMuted);
         muteBtn.innerHTML = !this._isMuted
@@ -144,7 +280,7 @@
     },
 
     isActive: function () {
-      return this._room !== null;
+      return this._ws !== null;
     },
 
     getActiveChannelId: function () {
@@ -152,10 +288,11 @@
     },
 
     _cleanup: function () {
-      this._room = null;
       this._activeChannelId = null;
       var voiceBar = document.getElementById("voice-bar");
       if (voiceBar) voiceBar.classList.add("hidden");
+      var container = document.getElementById("voice-container");
+      if (container) container.innerHTML = "";
     },
 
     _showError: function (msg) {

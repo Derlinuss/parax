@@ -11,8 +11,8 @@ window.FLY_SERVICES = {
 
   // Camera & Screen Sharing Signaling Microservice
   MEDIA_SERVER: window.location.hostname === "localhost"
-    ? "ws://localhost:8081"
-    : "wss://parax-media-server.fly.dev"
+    ? "ws://localhost:8080"
+    : "wss://parax-media-server.onrender.com"
 };
 
 /**
