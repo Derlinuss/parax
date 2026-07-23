@@ -1,0 +1,12 @@
+port: 7880
+bind_addresses:
+  - ""
+rtc:
+  tcp_port: 7881
+  port_range_start: 50000
+  port_range_end: 60000
+  use_ice_lite: false
+logging:
+  level: info
+redis:
+  # Optional: if using Redis, else standalone single-node mode works fine on 1 VM

@@ -631,7 +631,31 @@ input {
   to { transform: translateX(0); opacity: 1; }
 }
 
-/* dashboard ana */
+/* Custom Context Menu */
+.custom-context-menu {
+  position: absolute;
+  display: none;
+  background: #111214;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 5px 0;
+  z-index: 1000;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+  min-width: 150px;
+}
+.context-menu-item {
+  padding: 8px 16px;
+  cursor: pointer;
+  color: var(--text-primary);
+  font-size: 0.9rem;
+  transition: background 0.1s ease;
+}
+.context-menu-item:hover {
+  background: var(--bg-hover);
+}
+.context-menu-item.danger {
+  color: var(--error);
+}
 
 .dashboard-wrapper {
   display: flex;

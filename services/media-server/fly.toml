@@ -1,0 +1,33 @@
+# fly.toml app configuration file for parax-media-server
+app = "parax-media-server"
+primary_region = "fra"
+
+[build]
+
+[env]
+  PORT = "8080"
+
+[[services]]
+  protocol = "tcp"
+  internal_port = 8080
+
+  [[services.ports]]
+    port = 80
+    handlers = ["http"]
+
+  [[services.ports]]
+    port = 443
+    handlers = ["tls", "http"]
+
+  [[services.http_checks]]
+    interval = 10000
+    grace_period = "5s"
+    method = "get"
+    path = "/health"
+    protocol = "http"
+    timeout = 2000
+
+[vm]
+  cpu_kind = "shared"
+  cpus = 1
+  memory_mb = 256

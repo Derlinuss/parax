@@ -1,0 +1,48 @@
+app = "parax-livekit"
+primary_region = "fra"
+
+[build]
+  image = "livekit/livekit-server:latest"
+
+[env]
+  PORT = "7880"
+
+[[services]]
+  protocol = "tcp"
+  internal_port = 7880
+
+  [[services.ports]]
+    port = 80
+    handlers = ["http"]
+    force_https = true
+
+  [[services.ports]]
+    port = 443
+    handlers = ["tls", "http"]
+
+  [[services.http_checks]]
+    interval = 10000
+    grace_period = "5s"
+    method = "get"
+    path = "/"
+    protocol = "http"
+    timeout = 2000
+
+[[services]]
+  protocol = "tcp"
+  internal_port = 7881
+
+  [[services.ports]]
+    port = 7881
+
+[[services]]
+  protocol = "udp"
+  internal_port = 50000
+
+  [[services.ports]]
+    port = 50000
+
+[vm]
+  cpu_kind = "shared"
+  cpus = 1
+  memory_mb = 512

@@ -1,11 +1,11 @@
-// Para Voice — LiveKit voice & video chat module for Parax
+// Para Voice — Daily.co voice chat module for Parax
 ;(function () {
   "use strict";
 
   var ParaVoice = {
-    _room: null,
+    _call: null,
+    _container: null,
     _activeChannelId: null,
-    _isMuted: false,
     _listeners: {},
 
     init: function () {
@@ -15,6 +15,7 @@
     },
 
     _setupUI: function () {
+      var voiceBar = document.getElementById("voice-bar");
       var leaveBtn = document.getElementById("voice-leave-btn");
       var muteBtn = document.getElementById("voice-mute-btn");
 
@@ -34,17 +35,26 @@
     _setupListeners: function () {
       var _this = this;
       this._listeners["visibilitychange"] = function () {
-        if (_this._room && _this._room.localParticipant) {
-          _this._room.localParticipant.setMicrophoneEnabled(!document.hidden);
+        if (document.hidden && _this._call) {
+          _this._call.updateInputSettings({ audio: false });
+        } else if (_this._call) {
+          _this._call.updateInputSettings({ audio: true });
         }
       };
       document.addEventListener("visibilitychange", this._listeners["visibilitychange"]);
     },
 
+    _destroyListeners: function () {
+      for (var key in this._listeners) {
+        document.removeEventListener(key, this._listeners[key]);
+      }
+      this._listeners = {};
+    },
+
     join: function (channelId, channelName) {
       var _this = this;
 
-      if (this._room) {
+      if (this._call) {
         this.leave();
       }
 
@@ -59,17 +69,16 @@
       if (!user) return;
 
       user.getIdToken().then(function (token) {
-        return fetch("/api/voice/token", {
+        return fetch("/api/voice/create-room", {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
             Authorization: "Bearer " + token,
           },
-          body: JSON.stringify({ roomName: "channel_" + channelId })
         });
       }).then(function (res) {
         return res.json();
-      }).then(async function (data) {
+      }).then(function (data) {
         if (data.error) {
           if (typeof Para !== "undefined") Para.capture(data.error, { context: "voice-join" });
           _this._showError("Voice chat unavailable: " + data.error);
@@ -77,74 +86,65 @@
           return;
         }
 
-        if (typeof LivekitClient === "undefined") {
-          _this._showError("LiveKit SDK not loaded");
+        if (typeof Daily === "undefined") {
+          _this._showError("Daily.co SDK not loaded");
           return;
         }
 
-        try {
-          const room = new LivekitClient.Room({
-            adaptiveStream: true,
-            dynacast: true,
-          });
+        var container = document.getElementById("voice-container");
+        if (!container) return;
 
-          _this._room = room;
+        _this._container = container;
+        _this._call = Daily.createFrame(container, {
+          showLeaveButton: false,
+          iframeStyle: {
+            width: "100%",
+            height: "100%",
+            border: "0",
+            borderRadius: "8px",
+          },
+        });
 
-          room.on(LivekitClient.RoomEvent.ParticipantConnected, (participant) => {
-            console.log("Participant connected:", participant.identity);
-          });
+        _this._call.on("left-meeting", function () {
+          _this._cleanup();
+        });
 
-          room.on(LivekitClient.RoomEvent.TrackSubscribed, (track, publication, participant) => {
-            if (track.kind === LivekitClient.Track.Kind.Audio) {
-              const element = track.attach();
-              document.body.appendChild(element);
-            }
-          });
+        _this._call.on("error", function (e) {
+          if (typeof Para !== "undefined") Para.capture(e, { context: "daily-call" });
+        });
 
-          room.on(LivekitClient.RoomEvent.Disconnected, () => {
-            _this._cleanup();
-          });
-
-          await room.connect(data.url, data.token);
-          await room.localParticipant.enableCameraAndMicrophone();
-          console.log("Connected to LiveKit room:", data.roomName);
-        } catch (err) {
-          console.error("LiveKit connection error:", err);
-          if (typeof Para !== "undefined") Para.capture(err, { context: "livekit-connect" });
-          _this._showError("Failed to connect to voice/video room");
-          _this.leave();
-        }
+        _this._call.join({ url: data.url });
       }).catch(function (err) {
-        if (typeof Para !== "undefined") Para.capture(err, { context: "voice-token-fetch" });
+        if (typeof Para !== "undefined") Para.capture(err, { context: "voice-join-fetch" });
         _this._showError("Failed to connect to voice chat");
         _this.leave();
       });
     },
 
     leave: function () {
-      if (this._room) {
-        try { this._room.disconnect(); } catch (e) {}
-        this._room = null;
+      if (this._call) {
+        try { this._call.leave(); } catch (e) {}
+        try { this._call.destroy(); } catch (e) {}
+        this._call = null;
       }
       this._cleanup();
     },
 
     toggleMute: function () {
-      if (!this._room || !this._room.localParticipant) return;
+      if (!this._call) return;
       var muteBtn = document.getElementById("voice-mute-btn");
-      this._isMuted = !this._isMuted;
-      this._room.localParticipant.setMicrophoneEnabled(!this._isMuted);
-
+      this._call.setLocalAudio(!this._call._localAudioState);
+      this._call._localAudioState = !this._call._localAudioState;
       if (muteBtn) {
-        muteBtn.classList.toggle("muted", this._isMuted);
-        muteBtn.innerHTML = !this._isMuted
+        muteBtn.classList.toggle("muted");
+        muteBtn.innerHTML = this._call._localAudioState
           ? '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>'
           : '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><line x1="23" y1="9" x2="17" y2="15"/><line x1="17" y1="9" x2="23" y2="15"/></svg>';
       }
     },
 
     isActive: function () {
-      return this._room !== null;
+      return this._call !== null;
     },
 
     getActiveChannelId: function () {
@@ -152,10 +152,12 @@
     },
 
     _cleanup: function () {
-      this._room = null;
+      this._call = null;
       this._activeChannelId = null;
       var voiceBar = document.getElementById("voice-bar");
       if (voiceBar) voiceBar.classList.add("hidden");
+      var container = document.getElementById("voice-container");
+      if (container) container.innerHTML = "";
     },
 
     _showError: function (msg) {
