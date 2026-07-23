@@ -165,10 +165,17 @@ async function paraxResmiKontrol() {
         });
         await db.collection("servers").doc(PARAX_OFFICIAL_CODE).collection("channels").add({
             name: "announcements",
+            type: "text",
             createdAt: firebase.firestore.FieldValue.serverTimestamp(),
         });
         await db.collection("servers").doc(PARAX_OFFICIAL_CODE).collection("channels").add({
             name: "general",
+            type: "text",
+            createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+        });
+        await db.collection("servers").doc(PARAX_OFFICIAL_CODE).collection("channels").add({
+            name: "voice-lounge",
+            type: "voice",
             createdAt: firebase.firestore.FieldValue.serverTimestamp(),
         });
         return true;
@@ -191,6 +198,12 @@ async function sunucuAc(name, joinType = "open") {
     });
     await db.collection("servers").doc(code).collection("channels").add({
         name: "general",
+        type: "text",
+        createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+    });
+    await db.collection("servers").doc(code).collection("channels").add({
+        name: "general-voice",
+        type: "voice",
         createdAt: firebase.firestore.FieldValue.serverTimestamp(),
     });
     await db.collection("serverMembers").doc(uyeDokumanId(user.uid, code)).set({
